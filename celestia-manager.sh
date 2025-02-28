@@ -1030,15 +1030,6 @@ get_bridge_wallet() {
 }
 
 ###################
-# Service Operation Functions
-###################
-
-service_operations() {
-    # TODO: Implement service operations menu
-    echo "Function not implemented: service_operations"
-}
-
-###################
 # Status & Logs Functions
 ###################
 
