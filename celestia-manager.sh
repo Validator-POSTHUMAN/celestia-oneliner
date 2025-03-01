@@ -13,15 +13,68 @@ MIN_RAM_MB=24000
 MIN_DISK_GB=3000
 GO_VERSION="1.23.5"
 APP_VERSION="v3.3.1"
+BRIDGE_VERSION="v0.21.5"
 DEFAULT_CHAIN_ID="celestia"
 
 # Snapshot URLs
-SNAPSHOT_PRUNED="https://server-2.itrocket.net/mainnet/celestia/celestia_2025-02-27_4224669_snap.tar.lz4"
+SNAPSHOT_PRUNED="https://snapshots.celestia.posthuman.digital/data_latest.lz4"
 SNAPSHOT_ARCHIVE="https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
+SNAPSHOT_BRIDGE="https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
+SNAPSHOT_CONSENSUS="https://server-2.itrocket.net/mainnet/celestia/celestia_2025-02-27_4224669_snap.tar.lz4"
+
+# Network resources
+GENESIS_URL="https://raw.githubusercontent.com/celestiaorg/networks/master/celestia/genesis.json"
+ADDRBOOK_URL="https://raw.githubusercontent.com/celestiaorg/networks/master/celestia/addrbook.json"
+
+# RPC URL
+RPC_URL="https://rpc.celestia-mainnet.posthuman.digital"
+
+# P2P Configuration
+SEEDS="12ad7c73c7e1f2460941326937a039139aa78884@celestia-mainnet-seed.itrocket.net:40656"
+PEERS="cd9f852141cd6f78e9443cea389911a6f0a5df72@8.52.247.252:26656"
 
 ###################
 # Core Functions
 ###################
+
+check_and_install_bbr() {
+    echo "Checking BBR congestion control..."
+
+    # Check if BBR is already enabled
+    if grep -q "bbr" /proc/sys/net/ipv4/tcp_congestion_control; then
+        echo "✅ BBR is already enabled"
+        return 0
+    fi
+
+    echo "Installing and enabling BBR..."
+
+    # Enable BBR module
+    if ! sudo modprobe tcp_bbr; then
+        echo "❌ Failed to load BBR module"
+        return 1
+    fi
+
+    # Add BBR configuration to sysctl
+    cat << EOF | sudo tee /etc/sysctl.d/99-bbr.conf > /dev/null
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+
+    # Apply sysctl settings
+    if ! sudo sysctl -p /etc/sysctl.d/99-bbr.conf; then
+        echo "❌ Failed to apply BBR settings"
+        return 1
+    fi
+
+    # Verify BBR is enabled
+    if grep -q "bbr" /proc/sys/net/ipv4/tcp_congestion_control; then
+        echo "✅ BBR has been successfully enabled"
+        return 0
+    else
+        echo "❌ Failed to enable BBR"
+        return 1
+    fi
+}
 
 check_system_requirements() {
     echo "Validating system specifications..."
@@ -52,7 +105,18 @@ check_system_requirements() {
             return 1
         fi
     fi
+
+    # Check and install BBR
+    if ! check_and_install_bbr; then
+        echo "Warning: BBR configuration failed."
+        read -rp "Do you want to continue anyway? (y/N): " choice
+        if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
+            return 1
+        fi
+    fi
+
     echo "System requirements check completed."
+    return 0
 }
 
 ###################
@@ -189,42 +253,35 @@ install_node_consensus() {
     rm -rf celestia-app
     git clone https://github.com/celestiaorg/celestia-app.git
     cd celestia-app/
-    git checkout tags/$CELESTIA_VERSION -b $CELESTIA_VERSION
+    git checkout tags/$APP_VERSION -b $APP_VERSION
     make install
 
     # Configure and initialize app
     echo "Configuring Celestia node..."
     celestia-appd config node tcp://localhost:${CELESTIA_PORT}657
     celestia-appd config keyring-backend os
-    celestia-appd config chain-id celestia
-    celestia-appd init $MONIKER --chain-id celestia
-    celestia-appd download-genesis celestia
+    celestia-appd config chain-id $CELESTIA_CHAIN_ID
+    celestia-appd init $MONIKER --chain-id $CELESTIA_CHAIN_ID
+    celestia-appd download-genesis $CELESTIA_CHAIN_ID
 
     # Download genesis and addrbook
-    wget -O $HOME/.celestia-app/config/genesis.json https://server-2.itrocket.net/mainnet/celestia/genesis.json
-    wget -O $HOME/.celestia-app/config/addrbook.json https://server-2.itrocket.net/mainnet/celestia/addrbook.json
+    wget -O $HOME/.celestia-app/config/genesis.json "$GENESIS_URL"
+    wget -O $HOME/.celestia-app/config/addrbook.json "$ADDRBOOK_URL"
 
-    # Set seeds and peers
-    SEEDS="12ad7c73c7e1f2460941326937a039139aa78884@celestia-mainnet-seed.itrocket.net:40656"
-    PEERS="d535cbf8d0efd9100649aa3f53cb5cbab33ef2d6@celestia-mainnet-peer.itrocket.net:40656,acca7837e4eb5f9dc7f5a94ed1d82edda6931ff8@135.181.246.172:26656"
-    sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$SEEDS\"/}" \
-           -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.celestia-app/config/config.toml
-
-    # Set custom ports
-    sed -i.bak -e "s%:1317%:${CELESTIA_PORT}317%g;
-    s%:8080%:${CELESTIA_PORT}080%g;
-    s%:9090%:${CELESTIA_PORT}090%g;
-    s%:9091%:${CELESTIA_PORT}091%g;
-    s%:8545%:${CELESTIA_PORT}545%g;
-    s%:8546%:${CELESTIA_PORT}546%g;
-    s%:6065%:${CELESTIA_PORT}065%g" $HOME/.celestia-app/config/app.toml
-
+    # Set custom ports first
     sed -i.bak -e "s%:26658%:${CELESTIA_PORT}658%g;
     s%:26657%:${CELESTIA_PORT}657%g;
     s%:6060%:${CELESTIA_PORT}060%g;
     s%:26656%:${CELESTIA_PORT}656%g;
     s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${CELESTIA_PORT}656\"%;
     s%:26660%:${CELESTIA_PORT}660%g" $HOME/.celestia-app/config/config.toml
+
+    # Then update the SEEDS and PEERS variables with correct ports
+    local updated_seeds=$(echo "$SEEDS" | sed "s/:26656/:${CELESTIA_PORT}656/g")
+
+    # Set seeds and peers after port configuration
+    sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$updated_seeds\"/}" \
+           -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.celestia-app/config/config.toml
 
     # Configure pruning based on node type
     echo "Configuring pruning settings for $node_type node..."
@@ -268,8 +325,8 @@ EOF
     # Reset and download snapshot
     echo "Downloading snapshot..."
     celestia-appd tendermint unsafe-reset-all --home $HOME/.celestia-app
-    if curl -s --head curl https://server-2.itrocket.net/mainnet/celestia/celestia_2025-02-27_4224669_snap.tar.lz4 | head -n 1 | grep "200" > /dev/null; then
-        curl https://server-2.itrocket.net/mainnet/celestia/celestia_2025-02-27_4224669_snap.tar.lz4 | lz4 -dc - | tar -xf - -C $HOME/.celestia-app
+    if curl -s --head curl $SNAPSHOT_CONSENSUS | head -n 1 | grep "200" > /dev/null; then
+        curl $SNAPSHOT_CONSENSUS | lz4 -dc - | tar -xf - -C $HOME/.celestia-app
     else
         echo "No snapshot found"
     fi
@@ -302,7 +359,7 @@ install_node_bridge() {
     rm -rf celestia-node
     git clone https://github.com/celestiaorg/celestia-node.git
     cd celestia-node/
-    git checkout tags/v0.21.5
+    git checkout tags/$BRIDGE_VERSION
     make build
     sudo make install
     make cel-key
@@ -345,7 +402,7 @@ EOF
 
         cd $HOME
         aria2c -x 16 -s 16 -o celestia-bridge-snap.tar.lz4 \
-            https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4
+            "$SNAPSHOT_BRIDGE"
 
         sudo systemctl stop celestia-bridge
         rm -rf ~/.celestia-bridge/{blocks,data,index,inverted_index,transients,.lock}
@@ -555,19 +612,106 @@ configure_firewall() {
     sudo ufw status numbered
 }
 
-toggle_rpc() {
-    # TODO: Implement RPC toggle
-    echo "Function not implemented: toggle_rpc"
-}
+toggle_rpc_grpc() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║     Toggle RPC and gRPC      ║"
+    echo "╚══════════════════════════════╝"
 
-toggle_grpc() {
-    # TODO: Implement gRPC toggle
-    echo "Function not implemented: toggle_grpc"
+    check_node_installed || return 1
+
+    # Check current status
+    local grpc_enabled=$(grep "^enable = " "$HOME/.celestia-app/config/app.toml" | sed -n '/\[grpc\]/,/\[/{/^enable/p}' | awk '{print $3}')
+
+    if [ "$grpc_enabled" = "false" ]; then
+        echo "Enabling RPC and gRPC..."
+
+        # Enable gRPC and set address
+        sed -i '/\[grpc\]/,/\[/{s/^enable = .*/enable = true/}' "$HOME/.celestia-app/config/app.toml"
+        sed -i '/\[grpc\]/,/\[/{s/^address = .*/address = "0.0.0.0:'${CELESTIA_PORT}'090"/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Enable gRPC-web and set address
+        sed -i '/\[grpc-web\]/,/\[/{s/^enable = .*/enable = true/}' "$HOME/.celestia-app/config/app.toml"
+        sed -i '/\[grpc-web\]/,/\[/{s/^address = .*/address = "0.0.0.0:'${CELESTIA_PORT}'091"/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Update RPC settings in config.toml
+        sed -i 's/^laddr = "tcp:\/\/127.0.0.1:/laddr = "tcp:\/\/0.0.0.0:/g' "$HOME/.celestia-app/config/config.toml"
+
+        # Open ports in firewall
+        sudo ufw allow "${CELESTIA_PORT}090" comment 'Celestia gRPC port'
+        sudo ufw allow "${CELESTIA_PORT}091" comment 'Celestia gRPC-web port'
+        sudo ufw allow "${CELESTIA_PORT}657" comment 'Celestia RPC port'
+
+        echo "✅ RPC and gRPC enabled and ports opened"
+    else
+        echo "Disabling RPC and gRPC..."
+
+        # Disable gRPC and reset address
+        sed -i '/\[grpc\]/,/\[/{s/^enable = .*/enable = false/}' "$HOME/.celestia-app/config/app.toml"
+        sed -i '/\[grpc\]/,/\[/{s/^address = .*/address = "127.0.0.1:'${CELESTIA_PORT}'090"/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Disable gRPC-web and reset address
+        sed -i '/\[grpc-web\]/,/\[/{s/^enable = .*/enable = false/}' "$HOME/.celestia-app/config/app.toml"
+        sed -i '/\[grpc-web\]/,/\[/{s/^address = .*/address = "127.0.0.1:'${CELESTIA_PORT}'091"/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Reset RPC settings in config.toml
+        sed -i 's/^laddr = "tcp:\/\/0.0.0.0:/laddr = "tcp:\/\/127.0.0.1:/g' "$HOME/.celestia-app/config/config.toml"
+
+        # Close ports in firewall
+        sudo ufw delete allow "${CELESTIA_PORT}090"
+        sudo ufw delete allow "${CELESTIA_PORT}091"
+        sudo ufw delete allow "${CELESTIA_PORT}657"
+
+        echo "✅ RPC and gRPC disabled and ports closed"
+    fi
+
+    # Restart service
+    sudo systemctl restart celestia-appd
+    echo "Service restarted"
 }
 
 toggle_api() {
-    # TODO: Implement API toggle
-    echo "Function not implemented: toggle_api"
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║         Toggle API           ║"
+    echo "╚══════════════════════════════╝"
+
+    check_node_installed || return 1
+
+    # Check current API status
+    local api_enabled=$(grep "^enable = " "$HOME/.celestia-app/config/app.toml" | sed -n '/\[api\]/,/\[/{/^enable/p}' | awk '{print $3}')
+
+    if [ "$api_enabled" = "false" ]; then
+        echo "Enabling API..."
+
+        # Enable API and set address
+        sed -i '/\[api\]/,/\[/{s/^enable = .*/enable = true/}' "$HOME/.celestia-app/config/app.toml"
+        sed -i '/\[api\]/,/\[/{s/^address = .*/address = "tcp:\/\/0.0.0.0:'${CELESTIA_PORT}'317"/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Optional: Enable swagger
+        sed -i '/\[api\]/,/\[/{s/^swagger = .*/swagger = true/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Open API port in firewall
+        sudo ufw allow "${CELESTIA_PORT}317" comment 'Celestia API port'
+
+        echo "✅ API enabled and port opened"
+    else
+        echo "Disabling API..."
+
+        # Disable API and reset address
+        sed -i '/\[api\]/,/\[/{s/^enable = .*/enable = false/}' "$HOME/.celestia-app/config/app.toml"
+        sed -i '/\[api\]/,/\[/{s/^address = .*/address = "tcp:\/\/127.0.0.1:'${CELESTIA_PORT}'317"/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Disable swagger
+        sed -i '/\[api\]/,/\[/{s/^swagger = .*/swagger = false/}' "$HOME/.celestia-app/config/app.toml"
+
+        # Close API port in firewall
+        sudo ufw delete allow "${CELESTIA_PORT}317"
+
+        echo "✅ API disabled and port closed"
+    fi
+
+    # Restart service
+    sudo systemctl restart celestia-appd
+    echo "Service restarted"
 }
 
 show_node_peer() {
@@ -716,7 +860,7 @@ create_validator() {
     val_details=${val_details:-""}
     val_amount=${val_amount:-"1000000"}
     val_commission_rate=${val_commission_rate:-"0.1"}
-    val_commission_max_rate=${val_commission_max_change_rate:-"0.2"}
+    val_commission_max_rate=${val_commission_max_rate:-"0.2"}
     val_commission_max_change_rate=${val_commission_max_change_rate:-"0.01"}
 
     echo -e "\nValidator Configuration Summary:"
@@ -750,7 +894,7 @@ create_validator() {
     --identity "$val_identity" \
     --website "$val_website" \
     --details "$val_details" \
-    --chain-id "$CELESTIA_CHAIN_ID" \
+    --chain-id "$DEFAULT_CHAIN_ID" \
     --gas 300000 \
     --fees 2000utia \
     -y
@@ -796,7 +940,7 @@ unjail_validator() {
         return 1
     fi
 
-    celestia-appd tx slashing unjail --from "$WALLET" --chain-id "$CELESTIA_CHAIN_ID" --gas 300000 --fees 2000utia -y || {
+    celestia-appd tx slashing unjail --from "$WALLET" --chain-id "$DEFAULT_CHAIN_ID" --gas 300000 --fees 2000utia -y || {
         echo "❌ Error: Failed to unjail validator"
         return 1
     }
@@ -832,7 +976,7 @@ delegate_tokens() {
 
     celestia-appd tx staking delegate "$validator_address" "${amount}utia" \
         --from "$WALLET" \
-        --chain-id "$CELESTIA_CHAIN_ID" \
+        --chain-id "$DEFAULT_CHAIN_ID" \
         --gas 300000 \
         --fees 2000utia \
         -y || {
@@ -865,7 +1009,7 @@ unstake_tokens() {
     echo "Unbonding ${amount}utia..."
     celestia-appd tx staking unbond "$validator_address" "${amount}utia" \
         --from "$WALLET" \
-        --chain-id "$CELESTIA_CHAIN_ID" \
+        --chain-id "$DEFAULT_CHAIN_ID" \
         --gas 300000 \
         --fees 2000utia \
         -y || {
@@ -895,13 +1039,23 @@ view_validator_details() {
 
 check_validator_key() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║    Validator Key Status     ║"
+    echo "║    Validator Key Status      ║"
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-    [[ $(celestia-appd q staking validator $VALOPER_ADDRESS -oj | jq -r .consensus_pubkey.key) = \
+    source "$HOME/.bash_profile"
+
+    # Get validator address
+    VALOPER_ADDRESS=$(celestia-appd keys show "$WALLET" --bech val -a)
+    if [ -z "$VALOPER_ADDRESS" ]; then
+        echo "❌ Error: Could not get validator address"
+        return 1
+    fi
+
+    # Check key match
+    [[ $(celestia-appd q staking validator "$VALOPER_ADDRESS" -oj | jq -r .consensus_pubkey.key) = \
         $(celestia-appd status | jq -r .ValidatorInfo.PubKey.value) ]] && \
-        echo -e "Your key status is ok" || echo -e "Your key status is error"
+        echo -e "✅ Your key status is ok" || echo -e "❌ Your key status is error"
 }
 
 show_signing_info() {
@@ -1018,7 +1172,7 @@ reset_bridge_node() {
     echo -e "\n✅ Bridge node store reset successfully"
 }
 
-get_bridge_wallet() {
+get_wallet_address() {
     echo -e "\n╔══════════════════════════════╗"
     echo "║     Bridge Wallet Info       ║"
     echo "╚══════════════════════════════╝"
@@ -1026,7 +1180,12 @@ get_bridge_wallet() {
     check_bridge_installed || return 1
 
     cd "$HOME/celestia-node"
-    ./cel-key list --node.type bridge --keyring-backend os
+    if [ -f "./cel-key" ]; then
+        ./cel-key list --node.type bridge --keyring-backend os
+    else
+        echo "❌ Error: cel-key not found. Please ensure bridge node is properly installed."
+        return 1
+    fi
 }
 
 ###################
@@ -1063,7 +1222,7 @@ check_sync_status() {
 
     while true; do
         local_height=$(curl -s localhost:$rpc_port/status | jq -r '.result.sync_info.latest_block_height')
-        network_height=$(curl -s https://celestia-mainnet-rpc.itrocket.net/status | jq -r '.result.sync_info.latest_block_height')
+        network_height=$(curl -s $RPC_URL/status | jq -r '.result.sync_info.latest_block_height')
 
         if ! [[ "$local_height" =~ ^[0-9]+$ ]] || ! [[ "$network_height" =~ ^[0-9]+$ ]]; then
             echo -e "\033[1;31mError: Invalid block height data. Retrying...\033[0m"
@@ -1197,12 +1356,11 @@ node_operations_menu() {
         echo "  3.  Install Snapshot"
         echo "  4.  Update Node"
         echo "  5.  Configure Firewall Rules"
-        echo "  6.  Toggle RPC"
-        echo "  7.  Toggle gRPC"
-        echo "  8.  Toggle API"
-        echo "  9.  Show Node Peer"
-        echo " 10.  Delete Node"
-        echo "  0.  Back to Main Menu"
+        echo "  6.  Toggle RPC & gRPC"
+        echo "  7.  Toggle API"
+        echo "  8.  Show Node Peer"
+        echo "  9.  Delete Node"
+        echo " 10.  Back to Main Menu"
         echo ""
         read -rp "Enter your choice [0-10]: " subchoice
 
@@ -1212,12 +1370,11 @@ node_operations_menu() {
             3) install_snapshot ;;
             4) update_node ;;
             5) configure_firewall ;;
-            6) toggle_rpc ;;
-            7) toggle_grpc ;;
-            8) toggle_api ;;
-            9) show_node_peer ;;
-            10) delete_node ;;
-            0) break ;;
+            6) toggle_rpc_grpc ;;
+            7) toggle_api ;;
+            8) show_node_peer ;;
+            9) delete_node ;;
+            10) break ;;
             *) echo "Invalid option. Please enter a number between 0 and 10." ;;
         esac
     done
