@@ -20,7 +20,6 @@ DEFAULT_CHAIN_ID="celestia"
 SNAPSHOT_PRUNED="https://snapshots.celestia.posthuman.digital/data_latest.lz4"
 SNAPSHOT_ARCHIVE="https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
 SNAPSHOT_BRIDGE="https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
-SNAPSHOT_CONSENSUS="https://server-2.itrocket.net/mainnet/celestia/celestia_2025-02-27_4224669_snap.tar.lz4"
 
 # Network resources
 GENESIS_URL="https://raw.githubusercontent.com/celestiaorg/networks/master/celestia/genesis.json"
@@ -326,8 +325,8 @@ EOF
     # Reset and download snapshot
     echo "Downloading snapshot..."
     celestia-appd tendermint unsafe-reset-all --home $HOME/.celestia-app
-    if curl -s --head curl $SNAPSHOT_CONSENSUS | head -n 1 | grep "200" > /dev/null; then
-        curl $SNAPSHOT_CONSENSUS | lz4 -dc - | tar -xf - -C $HOME/.celestia-app
+    if curl -s --head curl $SNAPSHOT_PRUNED | head -n 1 | grep "200" > /dev/null; then
+        curl $SNAPSHOT_PRUNED | lz4 -dc - | tar -xf - -C $HOME/.celestia-app
     else
         echo "No snapshot found"
     fi
