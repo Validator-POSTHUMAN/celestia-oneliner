@@ -253,6 +253,8 @@ install_node_consensus() {
     cd celestia-app/
     git checkout tags/$APP_VERSION -b $APP_VERSION
     make install
+    mv $HOME/celestia-app/build/celestia-appd $HOME/go/bin/celestia-appd
+
 
     # Configure and initialize app
     echo "Configuring Celestia node..."
