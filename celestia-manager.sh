@@ -11,7 +11,7 @@ set -euo pipefail
 MIN_CPU_CORES=8
 MIN_RAM_MB=24000
 MIN_DISK_GB=3000
-GO_VERSION="1.23.5"
+GO_VERSION="1.23.4"
 APP_VERSION="v3.3.1"
 BRIDGE_VERSION="v0.21.5"
 DEFAULT_CHAIN_ID="celestia"
@@ -254,7 +254,7 @@ install_node_consensus() {
     cd celestia-app/
     git checkout tags/$APP_VERSION -b $APP_VERSION
     make install
-    mv $HOME/celestia-app/build/celestia-appd $HOME/go/bin/celestia-appd
+    #mv $HOME/celestia-app/build/celestia-appd $HOME/go/bin/celestia-appd
 
 
     # Configure and initialize app
@@ -440,11 +440,11 @@ EOF
 ###################
 
 check_node_installed() {
-    # if ! command -v celestia-appd &> /dev/null; then
-    #     echo "❌ Error: celestia-appd is not installed!"
-    #     echo "Please install the node first."
-    #     return 1
-    # fi
+    if ! command -v celestia-appd &> /dev/null; then
+        echo "❌ Error: celestia-appd is not installed!"
+        echo "Please install the node first."
+        return 1
+    fi
     return 0
 }
 
@@ -848,6 +848,103 @@ check_balance() {
     source "$HOME/.bash_profile"
     WALLET_ADDRESS=$(celestia-appd keys show "$WALLET" -a)
     celestia-appd q bank balances "$WALLET_ADDRESS"
+}
+
+create_wallet() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║       Create Wallet          ║"
+    echo "╚══════════════════════════════╝"
+
+    check_node_installed || return 1
+    source "$HOME/.bash_profile"
+
+    if [ -z "$WALLET" ]; then
+        echo "WALLET variable not set. Please run set_environment_variables first."
+        return 1
+    fi
+
+    # Check if wallet already exists
+    if celestia-appd keys show "$WALLET" &>/dev/null; then
+        echo "⚠️  Wallet '$WALLET' already exists!"
+        read -rp "Do you want to create a new wallet with a different name? (y/N): " choice
+        if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
+            return 0
+        fi
+        read -rp "Enter new wallet name: " WALLET
+        # Update WALLET in .bash_profile
+        sed -i "/^export WALLET=/c\export WALLET=\"$WALLET\"" "$HOME/.bash_profile"
+        source "$HOME/.bash_profile"
+    fi
+
+    echo -e "\n⚠️  IMPORTANT: Please save the mnemonic phrase that will be shown below!"
+    echo "It's your only backup if you lose access to your wallet."
+    read -rp "Press Enter when you're ready..."
+
+    # Create new wallet
+    celestia-appd keys add "$WALLET"
+
+    # Save wallet and validator addresses
+    WALLET_ADDRESS=$(celestia-appd keys show "$WALLET" -a)
+    VALOPER_ADDRESS=$(celestia-appd keys show "$WALLET" --bech val -a)
+
+    # Update or add addresses to .bash_profile
+    if grep -q "WALLET_ADDRESS=" "$HOME/.bash_profile"; then
+        sed -i "/^export WALLET_ADDRESS=/c\export WALLET_ADDRESS=$WALLET_ADDRESS" "$HOME/.bash_profile"
+    else
+        echo "export WALLET_ADDRESS=$WALLET_ADDRESS" >> "$HOME/.bash_profile"
+    fi
+
+    if grep -q "VALOPER_ADDRESS=" "$HOME/.bash_profile"; then
+        sed -i "/^export VALOPER_ADDRESS=/c\export VALOPER_ADDRESS=$VALOPER_ADDRESS" "$HOME/.bash_profile"
+    else
+        echo "export VALOPER_ADDRESS=$VALOPER_ADDRESS" >> "$HOME/.bash_profile"
+    fi
+
+    source "$HOME/.bash_profile"
+
+    echo -e "\n✅ Wallet created successfully!"
+    echo "Wallet Address: $WALLET_ADDRESS"
+    echo "Validator Address: $VALOPER_ADDRESS"
+    echo -e "\n⚠️  Remember to fund this wallet before creating a validator!"
+}
+
+# Update the validator_operations_menu function to include the new option
+validator_operations_menu() {
+    while true; do
+        echo -e "\n╔══════════════════════════════╗"
+        echo "║  Validator Operations Menu   ║"
+        echo "╚══════════════════════════════╝"
+        echo "  1.  Create Wallet"
+        echo "  2.  View Validator Details"
+        echo "  3.  Check Balance"
+        echo "  4.  Create Validator"
+        echo "  5.  Show Slashing Parameters"
+        echo "  6.  Show Jailing Info"
+        echo "  7.  Unjail Validator"
+        echo "  8.  Delegate Tokens"
+        echo "  9.  Unbond Tokens"
+        echo " 10.  Check Validator Key"
+        echo " 11.  Show Signing Info"
+        echo "  0.  Back to Main Menu"
+        echo ""
+        read -rp "Enter your choice [0-11]: " subchoice
+
+        case $subchoice in
+            1) create_wallet ;;
+            2) view_validator_details ;;
+            3) check_balance ;;
+            4) create_validator ;;
+            5) show_slashing_params ;;
+            6) show_jailing_info ;;
+            7) unjail_validator ;;
+            8) delegate_tokens ;;
+            9) unstake_tokens ;;
+            10) check_validator_key ;;
+            11) show_signing_info ;;
+            0) break ;;
+            *) echo "Invalid option. Please enter a number between 0 and 11." ;;
+        esac
+    done
 }
 
 create_validator() {
@@ -1388,9 +1485,9 @@ node_operations_menu() {
         echo "  7.  Toggle API"
         echo "  8.  Show Node Peer"
         echo "  9.  Delete Node"
-        echo " 10.  Back to Main Menu"
+        echo "  0.  Back to Main Menu"
         echo ""
-        read -rp "Enter your choice [0-10]: " subchoice
+        read -rp "Enter your choice [0-9]: " subchoice
 
         case $subchoice in
             1) node_info ;;
@@ -1402,8 +1499,8 @@ node_operations_menu() {
             7) toggle_api ;;
             8) show_node_peer ;;
             9) delete_node ;;
-            10) break ;;
-            *) echo "Invalid option. Please enter a number between 0 and 10." ;;
+            0) break ;;
+            *) echo "Invalid option. Please enter a number between 0 and 9." ;;
         esac
     done
 }
@@ -1413,33 +1510,35 @@ validator_operations_menu() {
         echo -e "\n╔══════════════════════════════╗"
         echo "║  Validator Operations Menu   ║"
         echo "╚══════════════════════════════╝"
-        echo "  1.  View Validator Details"
-        echo "  2.  Check Balance"
-        echo "  3.  Create Validator"
-        echo "  4.  Show Slashing Parameters"
-        echo "  5.  Show Jailing Info"
-        echo "  6.  Unjail Validator"
-        echo "  7.  Delegate Tokens"
-        echo "  8.  Unbond Tokens"
-        echo "  9.  Check Validator Key"
-        echo " 10.  Show Signing Info"
+        echo "  1.  Check Balance"
+        echo "  2.  View Validator Details"
+        echo "  3.  Create Wallet"
+        echo "  4.  Create Validator"
+        echo "  5.  Show Slashing Parameters"
+        echo "  6.  Show Jailing Info"
+        echo "  7.  Unjail Validator"
+        echo "  8.  Delegate Tokens"
+        echo "  9.  Unbond Tokens"
+        echo " 10.  Check Validator Key"
+        echo " 11.  Show Signing Info"
         echo "  0.  Back to Main Menu"
         echo ""
-        read -rp "Enter your choice [0-10]: " subchoice
+        read -rp "Enter your choice [0-11]: " subchoice
 
         case $subchoice in
-            1) view_validator_details ;;
-            2) check_balance ;;
-            3) create_validator ;;
-            4) show_slashing_params ;;
-            5) show_jailing_info ;;
-            6) unjail_validator ;;
-            7) delegate_tokens ;;
-            8) unstake_tokens ;;
-            9) check_validator_key ;;
-            10) show_signing_info ;;
+            1) check_balance ;;
+            2) view_validator_details ;;
+            3) create_wallet ;;
+            4) create_validator ;;
+            5) show_slashing_params ;;
+            6) show_jailing_info ;;
+            7) unjail_validator ;;
+            8) delegate_tokens ;;
+            9) unstake_tokens ;;
+            10) check_validator_key ;;
+            11) show_signing_info ;;
             0) break ;;
-            *) echo "Invalid option. Please enter a number between 0 and 10." ;;
+            *) echo "Invalid option. Please enter a number between 0 and 11." ;;
         esac
     done
 }
