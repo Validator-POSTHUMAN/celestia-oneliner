@@ -40,7 +40,6 @@ PEERS="cd9f852141cd6f78e9443cea389911a6f0a5df72@8.52.247.252:26656"
 check_and_install_bbr() {
     echo "Checking BBR congestion control..."
 
-    # Check if BBR is already enabled
     if grep -q "bbr" /proc/sys/net/ipv4/tcp_congestion_control; then
         echo "✅ BBR is already enabled"
         return 0
@@ -48,7 +47,6 @@ check_and_install_bbr() {
 
     echo "Installing and enabling BBR..."
 
-    # Enable BBR module
     if ! sudo modprobe tcp_bbr; then
         echo "❌ Failed to load BBR module"
         return 1
@@ -439,11 +437,11 @@ EOF
 ###################
 
 check_node_installed() {
-    if ! command -v celestia-appd &> /dev/null; then
-        echo "❌ Error: celestia-appd is not installed!"
-        echo "Please install the node first."
-        return 1
-    fi
+    # if ! command -v celestia-appd &> /dev/null; then
+    #     echo "❌ Error: celestia-appd is not installed!"
+    #     echo "Please install the node first."
+    #     return 1
+    # fi
     return 0
 }
 
