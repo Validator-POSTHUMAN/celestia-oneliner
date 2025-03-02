@@ -604,133 +604,241 @@ configure_firewall() {
     sudo ufw status numbered
 }
 
-toggle_rpc_grpc() {
+toggle_rpc() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║     Toggle RPC and gRPC      ║"
+    echo "║         Toggle RPC           ║"
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-
-    # Source environment variables
     source "$HOME/.bash_profile"
     CELESTIA_PORT=${CELESTIA_PORT:-"40"}
 
-    # Check current status - improved detection
-    local grpc_enabled=$(grep -A 1 "\[grpc\]" "$HOME/.celestia-app/config/app.toml" | grep "enable =" | awk '{print $3}')
-    local grpc_address=$(grep -A 2 "\[grpc\]" "$HOME/.celestia-app/config/app.toml" | grep "address =" | cut -d'"' -f2)
-    local rpc_address=$(grep "^laddr = " "$HOME/.celestia-app/config/config.toml" | grep "//" | cut -d'"' -f2)
+    # Check current RPC status from config.toml
+    local rpc_address=$(grep "^laddr = " "$HOME/.celestia-app/config/config.toml" | grep "tcp://" | cut -d'"' -f2)
+    local is_enabled=$(echo "$rpc_address" | grep -c "0.0.0.0")
 
-    echo "Current status:"
-    echo "gRPC: $(if [ "$grpc_enabled" = "true" ] && [[ "$grpc_address" == *"0.0.0.0"* ]]; then echo "enabled"; else echo "disabled"; fi)"
-    echo "RPC: $(if [[ "$rpc_address" == *"0.0.0.0"* ]]; then echo "enabled"; else echo "disabled"; fi)"
+    echo "Current RPC status:"
+    echo "Address: $rpc_address"
+    echo "Enabled for external access: $([ "$is_enabled" -eq 1 ] && echo "yes" || echo "no")"
     echo ""
-
-    read -rp "Do you want to toggle these settings? (y/N): " choice
+    read -rp "Do you want to toggle RPC access? (y/N): " choice
     if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
         return 0
     fi
 
-    if [ "$grpc_enabled" = "true" ] || [[ "$rpc_address" == *"0.0.0.0"* ]]; then
-        echo "Disabling RPC and gRPC..."
-
-        # Disable gRPC and reset address
-        sed -i '/\[grpc\]/,/\[/{s/^enable = .*/enable = false/}' "$HOME/.celestia-app/config/app.toml"
-        sed -i '/\[grpc\]/,/\[/{s/^address = .*/address = "127.0.0.1:'${CELESTIA_PORT}'090"/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Disable gRPC-web and reset address
-        sed -i '/\[grpc-web\]/,/\[/{s/^enable = .*/enable = false/}' "$HOME/.celestia-app/config/app.toml"
-        sed -i '/\[grpc-web\]/,/\[/{s/^address = .*/address = "127.0.0.1:'${CELESTIA_PORT}'091"/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Reset RPC settings in config.toml
-        sed -i 's/^laddr = "tcp:\/\/0.0.0.0:/laddr = "tcp:\/\/127.0.0.1:/g' "$HOME/.celestia-app/config/config.toml"
-
-        # Close ports in firewall
-        sudo ufw delete allow "${CELESTIA_PORT}090" 2>/dev/null || true
-        sudo ufw delete allow "${CELESTIA_PORT}091" 2>/dev/null || true
+    if [ "$is_enabled" -eq 1 ]; then
+        echo "Disabling external RPC access..."
+        # Change from 0.0.0.0 to 127.0.0.1
+        sed -i 's|^laddr = "tcp://0.0.0.0:'${CELESTIA_PORT}'657"|laddr = "tcp://127.0.0.1:'${CELESTIA_PORT}'657"|' "$HOME/.celestia-app/config/config.toml"
+        # Remove firewall rule
         sudo ufw delete allow "${CELESTIA_PORT}657" 2>/dev/null || true
-
-        echo "✅ RPC and gRPC disabled and ports closed"
+        echo "✅ RPC restricted to localhost and port closed"
     else
-        echo "Enabling RPC and gRPC..."
-
-        # Enable gRPC and set address
-        sed -i '/\[grpc\]/,/\[/{s/^enable = .*/enable = true/}' "$HOME/.celestia-app/config/app.toml"
-        sed -i '/\[grpc\]/,/\[/{s/^address = .*/address = "0.0.0.0:'${CELESTIA_PORT}'090"/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Enable gRPC-web and set address
-        sed -i '/\[grpc-web\]/,/\[/{s/^enable = .*/enable = true/}' "$HOME/.celestia-app/config/app.toml"
-        sed -i '/\[grpc-web\]/,/\[/{s/^address = .*/address = "0.0.0.0:'${CELESTIA_PORT}'091"/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Update RPC settings in config.toml
-        sed -i 's/^laddr = "tcp:\/\/127.0.0.1:/laddr = "tcp:\/\/0.0.0.0:/g' "$HOME/.celestia-app/config/config.toml"
-
-        # Open ports in firewall
-        sudo ufw allow "${CELESTIA_PORT}090" comment 'Celestia gRPC port'
-        sudo ufw allow "${CELESTIA_PORT}091" comment 'Celestia gRPC-web port'
+        echo "Enabling external RPC access..."
+        # Change from 127.0.0.1 to 0.0.0.0
+        sed -i 's|^laddr = "tcp://127.0.0.1:'${CELESTIA_PORT}'657"|laddr = "tcp://0.0.0.0:'${CELESTIA_PORT}'657"|' "$HOME/.celestia-app/config/config.toml"
+        # Add firewall rule
         sudo ufw allow "${CELESTIA_PORT}657" comment 'Celestia RPC port'
-
-        echo "✅ RPC and gRPC enabled and ports opened"
+        echo "✅ RPC enabled for external access and port opened"
     fi
 
-    # Restart service
     sudo systemctl restart celestia-appd
     echo "Service restarted"
 }
 
+toggle_grpc() {
+    while true; do
+        echo -e "\n╔══════════════════════════════╗"
+        echo "║         Toggle gRPC          ║"
+        echo "╚══════════════════════════════╝"
+
+        check_node_installed || return 1
+        source "$HOME/.bash_profile"
+        CELESTIA_PORT=${CELESTIA_PORT:-"40"}
+
+        # Get values using awk for more reliable parsing
+        local grpc_enabled=$(awk '/^\[grpc\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$HOME/.celestia-app/config/app.toml")
+        local grpc_address=$(awk '/^\[grpc\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$HOME/.celestia-app/config/app.toml")
+        local grpc_web_enabled=$(awk '/^\[grpc-web\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$HOME/.celestia-app/config/app.toml")
+        local grpc_web_address=$(awk '/^\[grpc-web\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$HOME/.celestia-app/config/app.toml")
+
+        echo "Current status:"
+        echo "gRPC enabled: $grpc_enabled"
+        echo "gRPC address: $grpc_address"
+        echo "gRPC-web enabled: $grpc_web_enabled"
+        echo "gRPC-web address: $grpc_web_address"
+        echo ""
+        echo "1. Toggle gRPC"
+        echo "2. Toggle gRPC-web"
+        echo "3. Toggle both"
+        echo "0. Back"
+        read -rp "Choose an option [0-3]: " subchoice
+
+        case $subchoice in
+            1)
+                if [ "$grpc_enabled" = "true" ] && [[ "$grpc_address" == *"0.0.0.0"* ]]; then
+                    echo "Disabling gRPC..."
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw delete allow "${CELESTIA_PORT}090" 2>/dev/null || true
+                    echo "✅ gRPC disabled and port closed"
+                else
+                    echo "Enabling gRPC..."
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw allow "${CELESTIA_PORT}090" comment 'Celestia gRPC port'
+                    echo "✅ gRPC enabled and port opened"
+                fi
+                sudo systemctl restart celestia-appd
+                echo "Service restarted"
+                ;;
+            2)
+                if [ "$grpc_web_enabled" = "true" ] && [[ "$grpc_web_address" == *"0.0.0.0"* ]]; then
+                    echo "Disabling gRPC-web..."
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw delete allow "${CELESTIA_PORT}091" 2>/dev/null || true
+                    echo "✅ gRPC-web disabled and port closed"
+                else
+                    echo "Enabling gRPC-web..."
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw allow "${CELESTIA_PORT}091" comment 'Celestia gRPC-web port'
+                    echo "✅ gRPC-web enabled and port opened"
+                fi
+                sudo systemctl restart celestia-appd
+                echo "Service restarted"
+                ;;
+            3)
+                # Handle gRPC
+                if [ "$grpc_enabled" = "true" ] && [[ "$grpc_address" == *"0.0.0.0"* ]]; then
+                    echo "Disabling gRPC..."
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw delete allow "${CELESTIA_PORT}090" 2>/dev/null || true
+                    echo "✅ gRPC disabled and port closed"
+                else
+                    echo "Enabling gRPC..."
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw allow "${CELESTIA_PORT}090" comment 'Celestia gRPC port'
+                    echo "✅ gRPC enabled and port opened"
+                fi
+
+                # Handle gRPC-web
+                if [ "$grpc_web_enabled" = "true" ] && [[ "$grpc_web_address" == *"0.0.0.0"* ]]; then
+                    echo "Disabling gRPC-web..."
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw delete allow "${CELESTIA_PORT}091" 2>/dev/null || true
+                    echo "✅ gRPC-web disabled and port closed"
+                else
+                    echo "Enabling gRPC-web..."
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sudo ufw allow "${CELESTIA_PORT}091" comment 'Celestia gRPC-web port'
+                    echo "✅ gRPC-web enabled and port opened"
+                fi
+                sudo systemctl restart celestia-appd
+                echo "Service restarted"
+                ;;
+            0) return ;;
+            *) echo "Invalid option" ;;
+        esac
+    done
+}
+
 toggle_api() {
-    echo -e "\n╔══════════════════════════════╗"
-    echo "║         Toggle API           ║"
-    echo "╚══════════════════════════════╝"
+    while true; do
+        echo -e "\n╔══════════════════════════════╗"
+        echo "║         Toggle API           ║"
+        echo "╚══════════════════════════════╝"
 
-    check_node_installed || return 1
-    source "$HOME/.bash_profile"
-    CELESTIA_PORT=${CELESTIA_PORT:-"40"}
+        check_node_installed || return 1
+        source "$HOME/.bash_profile"
+        CELESTIA_PORT=${CELESTIA_PORT:-"40"}
+        local config_file="$HOME/.celestia-app/config/app.toml"
 
-    # Check current API status
-    local api_enabled=$(grep "^enable = " "$HOME/.celestia-app/config/app.toml" | sed -n '/\[api\]/,/\[/{/^enable/p}' | awk '{print $3}')
-    local api_address=$(grep "^address = " "$HOME/.celestia-app/config/app.toml" | sed -n '/\[api\]/,/\[/{/^address/p}' | cut -d'"' -f2)
+        # Get values using awk for more reliable parsing
+        local api_enabled=$(awk '/^\[api\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$config_file")
+        local api_address=$(awk '/^\[api\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$config_file")
+        local swagger_enabled=$(awk '/^\[api\]/{f=1;next}/^\[/{f=0}f&&/^swagger =/{print $3}' "$config_file")
 
-    echo "Current API status: ${api_enabled}"
-    echo "Current API address: ${api_address}"
-    echo ""
-    read -rp "Do you want to toggle API settings? (y/N): " choice
-    if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
-        return 0
-    fi
+        echo "Current status:"
+        echo "API enabled: $api_enabled"
+        echo "API address: $api_address"
+        echo "Swagger enabled: $swagger_enabled"
+        echo ""
+        echo "1. Toggle API"
+        echo "2. Toggle Swagger"
+        echo "3. Toggle both"
+        echo "0. Back"
+        read -rp "Choose an option [0-3]: " choice
 
-    if [ "$api_enabled" = "true" ]; then
-        echo "Disabling API..."
+        case $choice in
+            1)
+                if [ "$api_enabled" = "true" ] && [[ "$api_address" == *"0.0.0.0"* ]]; then
+                    echo "Disabling API..."
+                    sed -i '/^\[api\]/,/^\[/s/^enable = .*/enable = false/' "$config_file"
+                    sed -i '/^\[api\]/,/^\[/s|^address = .*|address = "tcp://127.0.0.1:'${CELESTIA_PORT}'317"|' "$config_file"
+                    sudo ufw delete allow "${CELESTIA_PORT}317" 2>/dev/null || true
+                    echo "✅ API disabled and port closed"
+                else
+                    echo "Enabling API..."
+                    sed -i '/^\[api\]/,/^\[/s/^enable = .*/enable = true/' "$config_file"
+                    sed -i '/^\[api\]/,/^\[/s|^address = .*|address = "tcp://0.0.0.0:'${CELESTIA_PORT}'317"|' "$config_file"
+                    sudo ufw allow "${CELESTIA_PORT}317" comment 'Celestia API port'
+                    echo "✅ API enabled and port opened"
+                fi
+                sudo systemctl restart celestia-appd
+                echo "Service restarted"
+                ;;
+            2)
+                if [ "$swagger_enabled" = "true" ]; then
+                    echo "Disabling Swagger..."
+                    sed -i '/^\[api\]/,/^\[/s/^swagger = .*/swagger = false/' "$config_file"
+                    echo "✅ Swagger disabled"
+                else
+                    echo "Enabling Swagger..."
+                    sed -i '/^\[api\]/,/^\[/s/^swagger = .*/swagger = true/' "$config_file"
+                    echo "✅ Swagger enabled"
+                fi
+                sudo systemctl restart celestia-appd
+                echo "Service restarted"
+                ;;
+            3)
+                # Handle API
+                if [ "$api_enabled" = "true" ] && [[ "$api_address" == *"0.0.0.0"* ]]; then
+                    echo "Disabling API..."
+                    sed -i '/^\[api\]/,/^\[/s/^enable = .*/enable = false/' "$config_file"
+                    sed -i '/^\[api\]/,/^\[/s|^address = .*|address = "tcp://127.0.0.1:'${CELESTIA_PORT}'317"|' "$config_file"
+                    sudo ufw delete allow "${CELESTIA_PORT}317" 2>/dev/null || true
+                    echo "✅ API disabled and port closed"
+                else
+                    echo "Enabling API..."
+                    sed -i '/^\[api\]/,/^\[/s/^enable = .*/enable = true/' "$config_file"
+                    sed -i '/^\[api\]/,/^\[/s|^address = .*|address = "tcp://0.0.0.0:'${CELESTIA_PORT}'317"|' "$config_file"
+                    sudo ufw allow "${CELESTIA_PORT}317" comment 'Celestia API port'
+                    echo "✅ API enabled and port opened"
+                fi
 
-        # Disable API and reset address
-        sed -i '/\[api\]/,/\[/{s/^enable = .*/enable = false/}' "$HOME/.celestia-app/config/app.toml"
-        sed -i '/\[api\]/,/\[/{s/^address = .*/address = "tcp:\/\/127.0.0.1:'${CELESTIA_PORT}'317"/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Disable swagger
-        sed -i '/\[api\]/,/\[/{s/^swagger = .*/swagger = false/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Close API port in firewall
-        sudo ufw delete allow "${CELESTIA_PORT}317" 2>/dev/null || true
-
-        echo "✅ API disabled and port closed"
-    else
-        echo "Enabling API..."
-
-        # Enable API and set address
-        sed -i '/\[api\]/,/\[/{s/^enable = .*/enable = true/}' "$HOME/.celestia-app/config/app.toml"
-        sed -i '/\[api\]/,/\[/{s/^address = .*/address = "tcp:\/\/0.0.0.0:'${CELESTIA_PORT}'317"/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Enable swagger
-        sed -i '/\[api\]/,/\[/{s/^swagger = .*/swagger = true/}' "$HOME/.celestia-app/config/app.toml"
-
-        # Open API port in firewall
-        sudo ufw allow "${CELESTIA_PORT}317" comment 'Celestia API port'
-
-        echo "✅ API enabled and port opened"
-    fi
-
-    # Restart service
-    sudo systemctl restart celestia-appd
-    echo "Service restarted"
+                # Handle Swagger
+                if [ "$swagger_enabled" = "true" ]; then
+                    echo "Disabling Swagger..."
+                    sed -i '/^\[api\]/,/^\[/s/^swagger = .*/swagger = false/' "$config_file"
+                    echo "✅ Swagger disabled"
+                else
+                    echo "Enabling Swagger..."
+                    sed -i '/^\[api\]/,/^\[/s/^swagger = .*/swagger = true/' "$config_file"
+                    echo "✅ Swagger enabled"
+                fi
+                sudo systemctl restart celestia-appd
+                echo "Service restarted"
+                ;;
+            0) return ;;
+            *) echo "Invalid option" ;;
+        esac
+    done
 }
 
 show_node_peer() {
@@ -1490,13 +1598,14 @@ node_operations_menu() {
         echo "  3.  Install Snapshot"
         echo "  4.  Update Node"
         echo "  5.  Configure Firewall Rules"
-        echo "  6.  Toggle RPC & gRPC"
-        echo "  7.  Toggle API"
-        echo "  8.  Show Node Peer"
-        echo "  9.  Delete Node"
+        echo "  6.  Toggle RPC"
+        echo "  7.  Toggle gRPC"
+        echo "  8.  Toggle API"
+        echo "  9.  Show Node Peer"
+        echo " 10.  Delete Node"
         echo "  0.  Back to Main Menu"
         echo ""
-        read -rp "Enter your choice [0-9]: " subchoice
+        read -rp "Enter your choice [0-10]: " subchoice
 
         case $subchoice in
             1) node_info ;;
@@ -1504,12 +1613,13 @@ node_operations_menu() {
             3) install_snapshot ;;
             4) update_node ;;
             5) configure_firewall ;;
-            6) toggle_rpc_grpc ;;
-            7) toggle_api ;;
-            8) show_node_peer ;;
-            9) delete_node ;;
+            6) toggle_rpc ;;
+            7) toggle_grpc ;;
+            8) toggle_api ;;
+            9) show_node_peer ;;
+            10) delete_node ;;
             0) break ;;
-            *) echo "Invalid option. Please enter a number between 0 and 9." ;;
+            *) echo "Invalid option. Please enter a number between 0 and 10." ;;
         esac
     done
 }
