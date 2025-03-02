@@ -104,15 +104,6 @@ check_system_requirements() {
         fi
     fi
 
-    # Check and install BBR
-    if ! check_and_install_bbr; then
-        echo "Warning: BBR configuration failed."
-        read -rp "Do you want to continue anyway? (y/N): " choice
-        if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
-            return 1
-        fi
-    fi
-
     echo "System requirements check completed."
     return 0
 }
@@ -241,6 +232,7 @@ install_node_consensus() {
 
     # Install dependencies and Go
     check_system_requirements
+    check_and_install_bbr
     set_environment_variables
     install_dependencies
     install_go
