@@ -339,6 +339,9 @@ install_node_bridge() {
     echo "║   Installing Bridge Node     ║"
     echo "╚══════════════════════════════╝"
 
+    # Add filesystem check before other checks
+    check_filesystem_type || return 1
+
     # Install dependencies and Go
     check_system_requirements
     set_environment_variables
@@ -422,6 +425,42 @@ EOF
 
     echo -e "\n✅ Bridge node installation completed!"
     echo "To check logs, use: sudo journalctl -u celestia-bridge -fo cat"
+
+    return 0
+}
+
+check_filesystem_type() {
+    echo "Checking filesystem type..."
+
+    # Get the filesystem type of the directory where .celestia-bridge will be stored
+    local target_dir="$HOME/.celestia-bridge"
+    local fs_type=$(df -T "$HOME" | awk 'NR==2 {print $2}')
+
+    if [ "$fs_type" = "ext4" ]; then
+        echo -e "\n⚠️  WARNING: EXT4 filesystem detected!"
+        echo "Running a bridge or full storage node on ext4 may cause errors due to large folder size."
+        echo -e "\nRecommended solutions:"
+        echo "1. Migrate to XFS/ZFS filesystem (recommended)"
+        echo "2. Modify ext4 to support large directories (if using separate partition)"
+        echo -e "\nFor ext4 modification:"
+        echo "1. Stop the node"
+        echo "2. Unmount the drive"
+        echo "3. Run: tune2fs -O large_dir /dev/yourpartition"
+        echo "4. Run: fsck -f /dev/yourpartition"
+        echo "5. Remount the partition"
+        echo -e "\nIf running on root/same partition as OS, we strongly recommend:"
+        echo "- Redo the node installation with XFS/ZFS"
+        echo "- Backup your node ID (files in keys folder) before proceeding"
+
+        read -rp "Do you want to proceed with installation anyway? (y/N): " choice
+        if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
+            echo "Installation cancelled."
+            return 1
+        fi
+        echo "Proceeding with installation on ext4..."
+    else
+        echo "✅ Filesystem type ($fs_type) is suitable for bridge node operation"
+    fi
 
     return 0
 }
