@@ -1450,12 +1450,30 @@ install_node_menu() {
         read -rp "Enter your choice [0-6]: " choice
 
         case $choice in
-            1) install_node_consensus "pruned" "off" ;;
-            2) install_node_consensus "pruned" "on" ;;
-            3) install_node_consensus "archive" "off" ;;
-            4) install_node_consensus "archive" "on" ;;
-            5) install_node_bridge "archive" ;;
-            6) install_node_bridge "snapshot" ;;
+            1)
+                install_node_consensus "pruned" "off"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            2)
+                install_node_consensus "pruned" "on"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            3)
+                install_node_consensus "archive" "off"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            4)
+                install_node_consensus "archive" "on"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            5)
+                install_node_bridge "archive"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            6)
+                install_node_bridge "snapshot"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
             0) break ;;
             *) echo "Invalid option. Please enter a number between 0 and 6." ;;
         esac
