@@ -246,7 +246,7 @@ install_go() {
         echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
     fi
 
-    source $HOME/.bash_profile
+    source $HOME/.bash_profile || true
     [ ! -d ~/go/bin ] && mkdir -p ~/go/bin
 
     # Verify installation
@@ -271,7 +271,7 @@ set_environment_variables() {
         read -rp "Do you want to update these variables? (y/N): " update_choice
         if [[ "$update_choice" != "y" && "$update_choice" != "Y" ]]; then
             echo "Keeping existing variables."
-            source "$HOME/.bash_profile"
+            source "$HOME/.bash_profile" || true
             return 0
         fi
         vars_exist=true
@@ -306,7 +306,7 @@ set_environment_variables() {
     } >> "$HOME/.bash_profile"
 
     # Load new variables into current session
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     echo -e "\nEnvironment variables have been set:"
     echo "WALLET: $WALLET"
@@ -435,7 +435,11 @@ EOF
     sudo systemctl enable celestia-appd
     sudo systemctl restart celestia-appd
 
-    echo "Installation completed! To check logs, use: sudo journalctl -u celestia-appd -fo cat"
+    echo -e "\n✅ Installation completed!"
+    echo "To check logs, use: sudo journalctl -u celestia-appd -fo cat"
+    echo ""
+    read -rp "Press Enter to return to main menu..."
+    return 0
 }
 
 install_node_bridge() {
@@ -531,7 +535,8 @@ EOF
 
     echo -e "\n✅ Bridge node installation completed!"
     echo "To check logs, use: sudo journalctl -u celestia-bridge -fo cat"
-
+    echo ""
+    read -rp "Press Enter to return to menu..."
     return 0
 }
 
@@ -678,8 +683,8 @@ install_snapshot() {
     sudo systemctl restart celestia-appd
 
     echo -e "\n✅ Snapshot installation completed!"
-    echo "Showing logs (press Ctrl+C to exit)..."
-    sudo journalctl -u celestia-appd -fo cat
+    read -rp "Press Enter to return to menu, or Ctrl+C to view logs..."
+    return 0
 }
 
 update_node() {
@@ -688,7 +693,7 @@ update_node() {
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     # Show current version
     current_version=$(celestia-appd version 2>/dev/null || echo "unknown")
@@ -815,7 +820,7 @@ toggle_rpc() {
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
     CELESTIA_PORT=${CELESTIA_PORT:-"40"}
 
     # Check current RPC status from config.toml
@@ -858,7 +863,7 @@ toggle_grpc() {
         echo "╚══════════════════════════════╝"
 
         check_node_installed || return 1
-        source "$HOME/.bash_profile"
+        source "$HOME/.bash_profile" || true
         CELESTIA_PORT=${CELESTIA_PORT:-"40"}
 
         # Get values using awk for more reliable parsing
@@ -960,7 +965,7 @@ toggle_api() {
         echo "╚══════════════════════════════╝"
 
         check_node_installed || return 1
-        source "$HOME/.bash_profile"
+        source "$HOME/.bash_profile" || true
         CELESTIA_PORT=${CELESTIA_PORT:-"40"}
         local config_file="$CELESTIA_HOME/config/app.toml"
 
@@ -1149,7 +1154,7 @@ check_balance() {
     echo "║         Check Balance        ║"
     echo "╚══════════════════════════════╝"
 
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
     WALLET_ADDRESS=$(celestia-appd keys show "$WALLET" -a)
     celestia-appd q bank balances "$WALLET_ADDRESS"
 }
@@ -1160,7 +1165,7 @@ create_wallet() {
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     if [ -z "$WALLET" ]; then
         echo "WALLET variable not set. Please run set_environment_variables first."
@@ -1177,7 +1182,7 @@ create_wallet() {
         read -rp "Enter new wallet name: " WALLET
         # Update WALLET in .bash_profile
         sed -i "/^export WALLET=/c\export WALLET=\"$WALLET\"" "$HOME/.bash_profile"
-        source "$HOME/.bash_profile"
+        source "$HOME/.bash_profile" || true
     fi
 
     echo -e "\n⚠️  IMPORTANT: Please save the mnemonic phrase that will be shown below!"
@@ -1204,7 +1209,7 @@ create_wallet() {
         echo "export VALOPER_ADDRESS=$VALOPER_ADDRESS" >> "$HOME/.bash_profile"
     fi
 
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     echo -e "\n✅ Wallet created successfully!"
     echo "Wallet Address: $WALLET_ADDRESS"
@@ -1257,7 +1262,7 @@ create_validator() {
     echo "╚══════════════════════════════╝"
 
     # Source environment variables
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     # Check if environment variables are set
     if [ -z "${WALLET:-}" ] || [ -z "${MONIKER:-}" ]; then
@@ -1362,7 +1367,7 @@ unjail_validator() {
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     if [ -z "$WALLET" ]; then
         echo "❌ Error: WALLET variable not set"
@@ -1381,7 +1386,7 @@ delegate_tokens() {
     echo "╚══════════════════════════════╝"
 
     check_node_installed || return 1
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     if [ -z "$WALLET" ]; then
         echo "❌ Error: WALLET variable not set"
@@ -1420,7 +1425,7 @@ unstake_tokens() {
     echo "╚═════════════════════════════╝"
 
     check_node_installed || return 1
-    source "$HOME/.bash_profile"
+    source "$HOME/.bash_profile" || true
 
     if [ -z "$WALLET" ]; then
         echo "❌ Error: WALLET variable not set"
@@ -1691,8 +1696,9 @@ update_da_node() {
     sudo systemctl restart $service_name
 
     echo -e "\n✅ $node_type node updated successfully"
-    echo "Showing logs (press Ctrl+C to exit)..."
-    sudo journalctl -u $service_name -fo cat
+    echo ""
+    read -rp "Press Enter to return to menu, or Ctrl+C to view logs..."
+    return 0
 }
 
 delete_da_node() {
@@ -1871,8 +1877,9 @@ EOF
     sudo systemctl restart celestia-light
 
     echo -e "\n✅ Light node installed successfully"
-    echo "Showing logs (press Ctrl+C to exit)..."
-    sudo journalctl -u celestia-light -fo cat
+    echo ""
+    read -rp "Press Enter to return to menu, or Ctrl+C to view logs..."
+    return 0
 }
 
 install_node_full() {
@@ -1928,8 +1935,9 @@ EOF
     sudo systemctl restart celestia-full
 
     echo -e "\n✅ Full storage node installed successfully"
-    echo "Showing logs (press Ctrl+C to exit)..."
-    sudo journalctl -u celestia-full -fo cat
+    echo ""
+    read -rp "Press Enter to return to menu, or Ctrl+C to view logs..."
+    return 0
 }
 
 ###################
@@ -2265,14 +2273,17 @@ view_da_logs() {
         1)
             echo "Showing bridge node logs (press Ctrl+C to exit)..."
             sudo journalctl -u celestia-bridge -fo cat
+            read -rp "Press Enter to continue..."
             ;;
         2)
             echo "Showing full storage node logs (press Ctrl+C to exit)..."
             sudo journalctl -u celestia-full -fo cat
+            read -rp "Press Enter to continue..."
             ;;
         3)
             echo "Showing light node logs (press Ctrl+C to exit)..."
             sudo journalctl -u celestia-light -fo cat
+            read -rp "Press Enter to continue..."
             ;;
         *)
             echo "Invalid choice"
