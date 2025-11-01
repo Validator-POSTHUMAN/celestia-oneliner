@@ -439,8 +439,15 @@ EOF
 
     # Reset and download snapshot
     echo "Downloading snapshot..."
+    # Backup priv_validator_state.json before removing data
+    if [ -f "$CELESTIA_HOME/data/priv_validator_state.json" ]; then
+        cp "$CELESTIA_HOME/data/priv_validator_state.json" "$CELESTIA_HOME/priv_validator_state.json.backup"
+        echo "✓ Backed up priv_validator_state.json"
+    fi
+
     # Use direct removal instead of tendermint reset to avoid config parsing issues
     rm -rf "$CELESTIA_HOME/data" 2>/dev/null || true
+
     if curl -s --head "$SNAPSHOT_PRUNED" | head -n 1 | grep "200" > /dev/null; then
         echo "Snapshot available, downloading..."
         curl -L "$SNAPSHOT_PRUNED" | zstd -d | tar -xf - -C "$CELESTIA_HOME"
@@ -449,6 +456,12 @@ EOF
         echo "⚠️  Snapshot not available, syncing from genesis"
         # Recreate data directory if no snapshot
         mkdir -p "$CELESTIA_HOME/data"
+    fi
+
+    # Restore priv_validator_state.json after snapshot extraction
+    if [ -f "$CELESTIA_HOME/priv_validator_state.json.backup" ]; then
+        mv "$CELESTIA_HOME/priv_validator_state.json.backup" "$CELESTIA_HOME/data/priv_validator_state.json"
+        echo "✓ Restored priv_validator_state.json"
     fi
 
     # Enable and start service
