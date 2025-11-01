@@ -114,14 +114,14 @@ select_network() {
     echo "  Current: $NETWORK_TYPE"
     echo ""
     read -rp "Enter your choice [1-2] or press Enter to keep current: " net_choice
-    
+
     case $net_choice in
         1) export NETWORK_TYPE="mainnet" ;;
         2) export NETWORK_TYPE="testnet" ;;
         "") ;;  # Keep current
         *) echo "Invalid choice. Keeping current: $NETWORK_TYPE" ;;
     esac
-    
+
     configure_network
     echo -e "\n✅ Network: $NETWORK_TYPE"
     echo "   Chain ID: $DEFAULT_CHAIN_ID"
@@ -138,13 +138,13 @@ select_custom_directory() {
     echo "Current: $CELESTIA_HOME"
     echo ""
     read -rp "Use custom directory? (y/N): " use_custom
-    
+
     if [[ "$use_custom" == "y" || "$use_custom" == "Y" ]]; then
         read -rp "Enter directory path (e.g., /mnt/nvme/.celestia-app): " custom_dir
         if [[ -n "$custom_dir" ]]; then
             export CELESTIA_HOME="$custom_dir"
             echo "✅ Will use: $CELESTIA_HOME"
-            
+
             if [[ ! -d "$CELESTIA_HOME" ]]; then
                 read -rp "Directory doesn't exist. Create it? (y/N): " create_dir
                 if [[ "$create_dir" == "y" || "$create_dir" == "Y" ]]; then
@@ -158,7 +158,7 @@ select_custom_directory() {
             fi
         fi
     fi
-    
+
     echo "📁 Installation directory: $CELESTIA_HOME"
 }
 
@@ -166,7 +166,14 @@ check_system_requirements() {
     echo "Validating system specifications..."
     local cpu_cores=$(nproc --all)
     local ram_mb=$(awk '/MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
-    local disk_gb=$(df --output=avail / | tail -1 | awk '{print int($1 / 1024 / 1024)}')
+
+    # Check disk space of the installation directory (CELESTIA_HOME if set, otherwise root)
+    local check_path="${CELESTIA_HOME:-/}"
+    # If CELESTIA_HOME doesn't exist yet, check its parent directory
+    if [ ! -d "$check_path" ]; then
+        check_path=$(dirname "$check_path")
+    fi
+    local disk_gb=$(df --output=avail "$check_path" | tail -1 | awk '{print int($1 / 1024 / 1024)}')
 
     if (( cpu_cores < MIN_CPU_CORES )); then
         echo "Warning: Available CPU cores (${cpu_cores}) are fewer than required (${MIN_CPU_CORES})."
@@ -185,7 +192,7 @@ check_system_requirements() {
     fi
 
     if (( disk_gb < MIN_DISK_GB )); then
-        echo "Warning: Available disk space (${disk_gb}GB) is less than required (${MIN_DISK_GB}GB)."
+        echo "Warning: Available disk space on $check_path (${disk_gb}GB) is less than required (${MIN_DISK_GB}GB)."
         read -rp "Do you want to continue anyway? (y/N): " choice
         if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
             return 1
@@ -338,14 +345,25 @@ install_node_consensus() {
 
     # Configure and initialize app
     echo "Configuring Celestia node..."
-    celestia-appd config node tcp://localhost:${CELESTIA_PORT}657
-    celestia-appd config keyring-backend os
-    celestia-appd config chain-id $CELESTIA_CHAIN_ID
-    celestia-appd init $MONIKER --chain-id $CELESTIA_CHAIN_ID
-    celestia-appd download-genesis $CELESTIA_CHAIN_ID
+    celestia-appd init $MONIKER --chain-id $CELESTIA_CHAIN_ID --home $CELESTIA_HOME
 
-    # Download genesis and addrbook
-    wget -O $CELESTIA_HOME/config/genesis.json "$GENESIS_URL"
+    # Set config values using config.toml directly
+    sed -i.bak "s|node = \".*\"|node = \"tcp://localhost:${CELESTIA_PORT}657\"|" $CELESTIA_HOME/config/client.toml
+    sed -i.bak "s|keyring-backend = \".*\"|keyring-backend = \"os\"|" $CELESTIA_HOME/config/client.toml
+    sed -i.bak "s|chain-id = \".*\"|chain-id = \"$CELESTIA_CHAIN_ID\"|" $CELESTIA_HOME/config/client.toml
+
+    # Download genesis
+    echo "Downloading genesis file..."
+    if [[ "$NETWORK_TYPE" == "testnet" ]]; then
+        # For testnet, use official download-genesis command
+        celestia-appd download-genesis $CELESTIA_CHAIN_ID --home $CELESTIA_HOME
+    else
+        # For mainnet, download from PostHuman
+        wget -O $CELESTIA_HOME/config/genesis.json "$GENESIS_URL"
+    fi
+
+    # Download addrbook
+    echo "Downloading addrbook..."
     wget -O $CELESTIA_HOME/config/addrbook.json "$ADDRBOOK_URL"
 
     # Set custom ports first
@@ -677,7 +695,7 @@ update_node() {
     echo -e "\n📊 Current version: $current_version"
     echo "📦 Recommended version: v5.0.11"
     echo ""
-    
+
     read -rp "Enter version to update to (press Enter for v5.0.11): " version_input
 
     # Use recommended version if empty
@@ -706,7 +724,7 @@ update_node() {
     source "$HOME/.bash_profile"
 
     echo -e "\n⏳ Updating Celestia node to version $version_input..."
-    
+
     # Stop service
     echo "🛑 Stopping celestia-appd service..."
     sudo systemctl stop celestia-appd
@@ -716,13 +734,13 @@ update_node() {
     rm -rf celestia-app
     git clone https://github.com/celestiaorg/celestia-app.git
     cd celestia-app/
-    
+
     if ! git checkout tags/$version_input -b $version_input 2>/dev/null; then
         echo "❌ Version $version_input not found. Please check available versions."
         sudo systemctl start celestia-appd
         return 1
     fi
-    
+
     echo "🔨 Building binary..."
     if ! make install; then
         echo "❌ Build failed. Restarting old version..."
@@ -1482,121 +1500,436 @@ show_signing_info() {
 }
 
 ###################
-# Bridge Management Functions
+# Data Availability Nodes Functions
 ###################
 
-check_bridge_installed() {
+check_da_node_installed() {
     if ! command -v celestia &> /dev/null; then
-        echo "❌ Error: celestia bridge is not installed!"
+        echo "❌ Error: celestia DA node is not installed!"
         return 1
     fi
     return 0
 }
 
-check_bridge_status() {
+check_da_node_status() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║     Bridge Node Status       ║"
+    echo "║      DA Node Status          ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
-    celestia header sync-state --node.store ~/.celestia-bridge/
+    check_da_node_installed || return 1
+
+    echo "Select node type:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
+
+    case $node_choice in
+        1)
+            if [ -d ~/.celestia-bridge ]; then
+                celestia header sync-state --node.store ~/.celestia-bridge/
+            else
+                echo "❌ Bridge node directory not found"
+            fi
+            ;;
+        2)
+            if [ -d ~/.celestia-full ]; then
+                celestia header sync-state --node.store ~/.celestia-full/
+            else
+                echo "❌ Full storage node directory not found"
+            fi
+            ;;
+        3)
+            if [ -d ~/.celestia-light ]; then
+                celestia header sync-state --node.store ~/.celestia-light/
+            else
+                echo "❌ Light node directory not found"
+            fi
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 }
 
-check_bridge_wallet() {
+check_da_wallet_balance() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║    Bridge Wallet Balance     ║"
+    echo "║    DA Node Wallet Balance    ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
-    celestia state balance --node.store ~/.celestia-bridge/
+    check_da_node_installed || return 1
+
+    echo "Select node type:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
+
+    case $node_choice in
+        1)
+            if [ -d ~/.celestia-bridge ]; then
+                celestia state balance --node.store ~/.celestia-bridge/
+            else
+                echo "❌ Bridge node directory not found"
+            fi
+            ;;
+        2)
+            if [ -d ~/.celestia-full ]; then
+                celestia state balance --node.store ~/.celestia-full/
+            else
+                echo "❌ Full storage node directory not found"
+            fi
+            ;;
+        3)
+            if [ -d ~/.celestia-light ]; then
+                celestia state balance --node.store ~/.celestia-light/
+            else
+                echo "❌ Light node directory not found"
+            fi
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 }
 
-get_node_id() {
+get_da_node_id() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║         Node ID              ║"
+    echo "║       DA Node ID             ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
-    celestia p2p info --node.store ~/.celestia-bridge/
+    check_da_node_installed || return 1
+
+    echo "Select node type:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
+
+    case $node_choice in
+        1)
+            if [ -d ~/.celestia-bridge ]; then
+                celestia p2p info --node.store ~/.celestia-bridge/
+            else
+                echo "❌ Bridge node directory not found"
+            fi
+            ;;
+        2)
+            if [ -d ~/.celestia-full ]; then
+                celestia p2p info --node.store ~/.celestia-full/
+            else
+                echo "❌ Full storage node directory not found"
+            fi
+            ;;
+        3)
+            if [ -d ~/.celestia-light ]; then
+                celestia p2p info --node.store ~/.celestia-light/
+            else
+                echo "❌ Light node directory not found"
+            fi
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 }
 
-update_bridge_node() {
+update_da_node() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║    Update Bridge Node        ║"
+    echo "║      Update DA Node          ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
+    check_da_node_installed || return 1
 
-    echo "Stopping bridge node..."
-    sudo systemctl stop celestia-bridge
+    echo "Select node type to update:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
+
+    local node_type=""
+    local service_name=""
+
+    case $node_choice in
+        1)
+            node_type="bridge"
+            service_name="celestia-bridge"
+            ;;
+        2)
+            node_type="full"
+            service_name="celestia-full"
+            ;;
+        3)
+            node_type="light"
+            service_name="celestia-light"
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
+
+    echo "Stopping $node_type node..."
+    sudo systemctl stop $service_name
 
     cd "$HOME"
     rm -rf celestia-node
     git clone https://github.com/celestiaorg/celestia-node.git
     cd celestia-node/
-    git checkout tags/v0.21.5
+    git checkout tags/$BRIDGE_VERSION
     make build
     sudo make install
     make cel-key
 
-    echo "Updating bridge configuration..."
-    celestia bridge config-update
+    echo "Updating $node_type node configuration..."
+    celestia $node_type config-update
 
-    echo "Starting bridge node..."
-    sudo systemctl restart celestia-bridge
+    echo "Starting $node_type node..."
+    sudo systemctl restart $service_name
 
-    echo -e "\n✅ Bridge node updated successfully"
+    echo -e "\n✅ $node_type node updated successfully"
     echo "Showing logs (press Ctrl+C to exit)..."
-    sudo journalctl -u celestia-bridge -fo cat
+    sudo journalctl -u $service_name -fo cat
 }
 
-delete_bridge_node() {
+delete_da_node() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║    Delete Bridge Node        ║"
+    echo "║      Delete DA Node          ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
+    check_da_node_installed || return 1
 
-    echo "Stopping and disabling bridge service..."
-    sudo systemctl stop celestia-bridge
-    sudo systemctl disable celestia-bridge
+    echo "Select node type to delete:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    echo "  4. All DA Nodes"
+    read -rp "Enter choice [1-4]: " node_choice
 
-    echo "Removing service files..."
-    sudo rm /etc/systemd/system/celestia-bridge*
-
-    echo "Removing bridge node files..."
-    rm -rf $HOME/celestia-node $HOME/.celestia-bridge
-
-    echo -e "\n✅ Bridge node deleted successfully"
+    case $node_choice in
+        1)
+            echo "Stopping and disabling bridge service..."
+            sudo systemctl stop celestia-bridge 2>/dev/null
+            sudo systemctl disable celestia-bridge 2>/dev/null
+            sudo rm /etc/systemd/system/celestia-bridge* 2>/dev/null
+            rm -rf $HOME/.celestia-bridge
+            echo -e "\n✅ Bridge node deleted successfully"
+            ;;
+        2)
+            echo "Stopping and disabling full storage service..."
+            sudo systemctl stop celestia-full 2>/dev/null
+            sudo systemctl disable celestia-full 2>/dev/null
+            sudo rm /etc/systemd/system/celestia-full* 2>/dev/null
+            rm -rf $HOME/.celestia-full
+            echo -e "\n✅ Full storage node deleted successfully"
+            ;;
+        3)
+            echo "Stopping and disabling light service..."
+            sudo systemctl stop celestia-light 2>/dev/null
+            sudo systemctl disable celestia-light 2>/dev/null
+            sudo rm /etc/systemd/system/celestia-light* 2>/dev/null
+            rm -rf $HOME/.celestia-light
+            echo -e "\n✅ Light node deleted successfully"
+            ;;
+        4)
+            echo "Stopping and disabling all DA services..."
+            sudo systemctl stop celestia-bridge celestia-full celestia-light 2>/dev/null
+            sudo systemctl disable celestia-bridge celestia-full celestia-light 2>/dev/null
+            sudo rm /etc/systemd/system/celestia-bridge* 2>/dev/null
+            sudo rm /etc/systemd/system/celestia-full* 2>/dev/null
+            sudo rm /etc/systemd/system/celestia-light* 2>/dev/null
+            rm -rf $HOME/celestia-node $HOME/.celestia-bridge $HOME/.celestia-full $HOME/.celestia-light
+            echo -e "\n✅ All DA nodes deleted successfully"
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 }
 
-reset_bridge_node() {
+reset_da_node() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║     Reset Bridge Node        ║"
+    echo "║       Reset DA Node          ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
+    check_da_node_installed || return 1
 
-    echo "Resetting bridge node store..."
-    celestia bridge unsafe-reset-store
+    echo "Select node type to reset:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
 
-    echo -e "\n✅ Bridge node store reset successfully"
+    case $node_choice in
+        1)
+            echo "Resetting bridge node store..."
+            celestia bridge unsafe-reset-store
+            echo -e "\n✅ Bridge node store reset successfully"
+            ;;
+        2)
+            echo "Resetting full storage node store..."
+            celestia full unsafe-reset-store
+            echo -e "\n✅ Full storage node store reset successfully"
+            ;;
+        3)
+            echo "Resetting light node store..."
+            celestia light unsafe-reset-store
+            echo -e "\n✅ Light node store reset successfully"
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 }
 
-get_wallet_address() {
+get_da_wallet_address() {
     echo -e "\n╔══════════════════════════════╗"
-    echo "║     Bridge Wallet Info       ║"
+    echo "║     DA Node Wallet Info      ║"
     echo "╚══════════════════════════════╝"
 
-    check_bridge_installed || return 1
+    check_da_node_installed || return 1
+
+    echo "Select node type:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
+
+    local node_type=""
+    case $node_choice in
+        1) node_type="bridge" ;;
+        2) node_type="full" ;;
+        3) node_type="light" ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 
     cd "$HOME/celestia-node"
     if [ -f "./cel-key" ]; then
-        ./cel-key list --node.type bridge --keyring-backend os
+        ./cel-key list --node.type $node_type --keyring-backend test
     else
-        echo "❌ Error: cel-key not found. Please ensure bridge node is properly installed."
+        echo "❌ Error: cel-key not found. Please ensure DA node is properly installed."
         return 1
     fi
+}
+
+install_node_light() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║   Installing Light Node      ║"
+    echo "╚══════════════════════════════╝"
+
+    check_filesystem_type || return 1
+    check_system_requirements
+    set_environment_variables
+    install_dependencies
+    install_go
+
+    echo "Installing Celestia node..."
+    cd $HOME
+    rm -rf celestia-node
+    git clone https://github.com/celestiaorg/celestia-node.git
+    cd celestia-node/
+    git checkout tags/$BRIDGE_VERSION
+    make build
+    sudo make install
+    make cel-key
+
+    echo "Initializing light node..."
+    celestia light init --p2p.network $NETWORK_TYPE
+
+    echo -e "\nLight node wallet information:"
+    cd $HOME/celestia-node
+    ./cel-key list --node.type light --keyring-backend test
+
+    echo "Creating systemd service..."
+    sudo tee /etc/systemd/system/celestia-light.service > /dev/null <<EOF
+[Unit]
+Description=celestia Light Node
+After=network-online.target
+
+[Service]
+User=$USER
+ExecStart=$(which celestia) light start --core.ip https://rpc.celestia.pops.one --p2p.network $NETWORK_TYPE
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    echo "Starting light node..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable celestia-light
+    sudo systemctl restart celestia-light
+
+    echo -e "\n✅ Light node installed successfully"
+    echo "Showing logs (press Ctrl+C to exit)..."
+    sudo journalctl -u celestia-light -fo cat
+}
+
+install_node_full() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║  Installing Full Storage Node║"
+    echo "╚══════════════════════════════╝"
+
+    check_filesystem_type || return 1
+    check_system_requirements
+    set_environment_variables
+    install_dependencies
+    install_go
+
+    echo "Installing Celestia node..."
+    cd $HOME
+    rm -rf celestia-node
+    git clone https://github.com/celestiaorg/celestia-node.git
+    cd celestia-node/
+    git checkout tags/$BRIDGE_VERSION
+    make build
+    sudo make install
+    make cel-key
+
+    echo "Initializing full storage node..."
+    read -rp "Enter Core RPC node IP: " rpc_node_ip
+    celestia full init --core.ip "$rpc_node_ip"
+
+    echo -e "\nFull storage node wallet information:"
+    cd $HOME/celestia-node
+    ./cel-key list --node.type full --keyring-backend test
+
+    echo "Creating systemd service..."
+    sudo tee /etc/systemd/system/celestia-full.service > /dev/null <<EOF
+[Unit]
+Description=celestia Full Storage Node
+After=network-online.target
+
+[Service]
+User=$USER
+ExecStart=$(which celestia) full start --core.ip $rpc_node_ip \
+--metrics.tls=true --metrics --metrics.endpoint otel.celestia.observer
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    echo "Starting full storage node..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable celestia-full
+    sudo systemctl restart celestia-full
+
+    echo -e "\n✅ Full storage node installed successfully"
+    echo "Showing logs (press Ctrl+C to exit)..."
+    sudo journalctl -u celestia-full -fo cat
 }
 
 ###################
@@ -1730,7 +2063,7 @@ install_node_menu() {
     # Select network and directory
     select_network
     select_custom_directory
-    
+
     while true; do
         echo -e "\n╔══════════════════════════════╗"
         echo "║      Install Node Menu       ║"
@@ -1740,13 +2073,10 @@ install_node_menu() {
         echo "  2.  Pruned Node - Indexer On"
         echo "  3.  Archive Node - Indexer Off"
         echo "  4.  Archive Node - Indexer On"
-        echo -e "\n Bridge Node"
-        echo "  5.  Bridge Node - Archive sync"
-        echo "  6.  Bridge Node - Use Snapshot"
         echo ""
         echo "  0.  Back to Main Menu"
         echo ""
-        read -rp "Enter your choice [0-6]: " choice
+        read -rp "Enter your choice [0-4]: " choice
 
         case $choice in
             1)
@@ -1765,16 +2095,8 @@ install_node_menu() {
                 install_node_consensus "archive" "on"
                 if [ $? -eq 0 ]; then break; fi
                 ;;
-            5)
-                install_node_bridge "archive"
-                if [ $? -eq 0 ]; then break; fi
-                ;;
-            6)
-                install_node_bridge "snapshot"
-                if [ $? -eq 0 ]; then break; fi
-                ;;
             0) break ;;
-            *) echo "Invalid option. Please enter a number between 0 and 7."  ;;
+            *) echo "Invalid option. Please enter a number between 0 and 4."  ;;
         esac
     done
 }
@@ -1853,34 +2175,110 @@ validator_operations_menu() {
     done
 }
 
-bridge_management_menu() {
+install_da_nodes_menu() {
+    # Select network and directory
+    select_network
+    select_custom_directory
+
     while true; do
         echo -e "\n╔══════════════════════════════╗"
-        echo "║    Bridge Management Menu    ║"
+        echo "║   Install DA Node Menu       ║"
         echo "╚══════════════════════════════╝"
-        echo "  1.  Check Bridge Node Status"
-        echo "  2.  Check Bridge Wallet Balance"
-        echo "  3.  Get Node ID"
-        echo "  4.  Get Wallet Address"
-        echo "  5.  Update Bridge Node"
-        echo "  6.  Reset Bridge Node"
-        echo "  7.  Delete Bridge Node"
-        echo "  0.  Back to Main Menu"
+        echo "  1.  Bridge Node - Archive sync"
+        echo "  2.  Bridge Node - Use Snapshot"
+        echo "  3.  Full Storage Node"
+        echo "  4.  Light Node"
         echo ""
-        read -rp "Enter your choice [0-7]: " subchoice
+        echo "  0.  Back to DA Nodes Menu"
+        echo ""
+        read -rp "Enter your choice [0-4]: " choice
 
-        case $subchoice in
-            1) check_bridge_status ;;
-            2) check_bridge_wallet ;;
-            3) get_node_id ;;
-            4) get_wallet_address ;;
-            5) update_bridge_node ;;
-            6) reset_bridge_node ;;
-            7) delete_bridge_node ;;
+        case $choice in
+            1)
+                install_node_bridge "archive"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            2)
+                install_node_bridge "snapshot"
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            3)
+                install_node_full
+                if [ $? -eq 0 ]; then break; fi
+                ;;
+            4)
+                install_node_light
+                if [ $? -eq 0 ]; then break; fi
+                ;;
             0) break ;;
-            *) echo "Invalid option. Please enter a number between 0 and 7." ;;
+            *) echo "Invalid option. Please enter a number between 0 and 4."  ;;
         esac
     done
+}
+
+da_nodes_menu() {
+    while true; do
+        echo -e "\n╔══════════════════════════════╗"
+        echo "║  Data Availability Nodes     ║"
+        echo "╚══════════════════════════════╝"
+        echo "  1.  Install DA Node"
+        echo "  2.  Check DA Node Status"
+        echo "  3.  Check DA Wallet Balance"
+        echo "  4.  Get DA Node ID"
+        echo "  5.  Get DA Wallet Address"
+        echo "  6.  Update DA Node"
+        echo "  7.  Reset DA Node"
+        echo "  8.  Delete DA Node"
+        echo "  9.  View DA Node Logs"
+        echo "  0.  Back to Main Menu"
+        echo ""
+        read -rp "Enter your choice [0-9]: " subchoice
+
+        case $subchoice in
+            1) install_da_nodes_menu ;;
+            2) check_da_node_status ;;
+            3) check_da_wallet_balance ;;
+            4) get_da_node_id ;;
+            5) get_da_wallet_address ;;
+            6) update_da_node ;;
+            7) reset_da_node ;;
+            8) delete_da_node ;;
+            9) view_da_logs ;;
+            0) break ;;
+            *) echo "Invalid option. Please enter a number between 0 and 9." ;;
+        esac
+    done
+}
+
+view_da_logs() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║      View DA Node Logs       ║"
+    echo "╚══════════════════════════════╝"
+
+    echo "Select node type:"
+    echo "  1. Bridge Node"
+    echo "  2. Full Storage Node"
+    echo "  3. Light Node"
+    read -rp "Enter choice [1-3]: " node_choice
+
+    case $node_choice in
+        1)
+            echo "Showing bridge node logs (press Ctrl+C to exit)..."
+            sudo journalctl -u celestia-bridge -fo cat
+            ;;
+        2)
+            echo "Showing full storage node logs (press Ctrl+C to exit)..."
+            sudo journalctl -u celestia-full -fo cat
+            ;;
+        3)
+            echo "Showing light node logs (press Ctrl+C to exit)..."
+            sudo journalctl -u celestia-light -fo cat
+            ;;
+        *)
+            echo "Invalid choice"
+            return 1
+            ;;
+    esac
 }
 
 service_operations_menu() {
@@ -1956,7 +2354,7 @@ show_main_menu() {
     echo "  2.  Update Node"
     echo "  3.  Node Operations"
     echo "  4.  Validator Operations"
-    echo "  5.  Bridge Management"
+    echo "  5.  Data Availability Nodes"
     echo "  6.  Service Operations"
     echo "  7.  Status & Logs"
     echo "  0.  Exit"
@@ -1972,10 +2370,10 @@ while true; do
     show_main_menu
     case $choice in
         1) install_node_menu ;;
-        2) update_node ;; 
+        2) update_node ;;
         3) node_operations_menu ;;
         4) validator_operations_menu ;;
-        5) bridge_management_menu ;;
+        5) da_nodes_menu ;;
         6) service_operations_menu ;;
         7) status_logs_menu ;;
         0)

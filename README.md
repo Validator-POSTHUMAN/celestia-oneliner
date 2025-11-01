@@ -1,272 +1,218 @@
 # Celestia Node Manager by PostHuman Validator
 
-Automated installation and management tool for Celestia mainnet nodes.
+One-line automated installation and management tool for Celestia nodes (Mainnet & Testnet).
 
-## 🚀 Quick Start
+## 🚀 One-Liner Install & Run
 
-Download and run the interactive script:
-
+**Auto-start in tmux session:**
 ```bash
-curl -o celestia-manager.sh https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh -o celestia-manager.sh && chmod +x celestia-manager.sh && tmux new-session -d -s celestia './celestia-manager.sh' && tmux attach-session -t celestia
 ```
 
-**Network:** Celestia Mainnet  
-**Chain ID:** celestia  
-**Current Version:** v5.0.11  
-**Go Version:** 1.24.1
+**Simple run (no tmux):**
+```bash
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh -o celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
+```
+
+**Current Versions:**
+- 🌐 Mainnet: `v5.0.11` (chain-id: `celestia`)
+- 🧪 Testnet: `v6.2.0-mocha` (chain-id: `mocha-4`)
+- 🔧 Go: `1.24.1`
 
 ---
 
 ## 📋 Features
 
-### 1️⃣ Install Node (Full Setup)
-Complete automated installation with options:
-- ✅ **Pruned Node** (Indexer On/Off) - Recommended for validators
-- ✅ **Archive Node** (Indexer On/Off) - Full history
-- ✅ System requirements check
-- ✅ Dependency installation (Go, build tools)
-- ✅ Genesis & Addrbook from Posthuman snapshots
-- ✅ Optimized configuration (pruning, gas price, peers)
-- ✅ systemd service setup
+### 1️⃣ Install Node
+**Consensus Nodes:**
+- Pruned Node (Indexer On/Off)
+- Archive Node (Indexer On/Off)
 
-### 2️⃣ Update Node ⭐
-**Easy one-click update:**
-- 📊 Shows current version
-- 📦 Recommends latest stable version (v5.0.11)
-- ✅ Press Enter to use recommended version
-- 🛑 Graceful stop → Update → Restart
-- ✅ Version verification
-- 📜 Optional log viewing
+**Installation includes:**
+- Automatic dependency installation
+- Network selection (Mainnet/Testnet)
+- Custom directory support
+- Snapshot integration
+- Systemd service setup
 
-**Typical update time:** 1-3 minutes
+### 2️⃣ Update Node
+One-click update with version selection and verification.
 
 ### 3️⃣ Node Operations
-- 📊 **Node Info** - Status and configuration
-- 🌐 **Your Node Peer** - Share your peer string
-- 🔥 **Firewall Configuration** - Secure your server
-- 🗑️ **Delete Node** - Complete removal
+- Node info & configuration
+- Snapshot installation
+- Firewall configuration
+- RPC/gRPC/API toggle
+- Delete node
 
 ### 4️⃣ Validator Operations
-- 💰 **Create Validator** - Initialize your validator
-- 📊 **View Validator Info** - Status and voting power
-- 💸 **Delegate Tokens** - Self-delegation
-- 📤 **Unstake Tokens** - Unbond tokens
-- 🏦 **Set Withdrawal Address** - Configure rewards
-- 🔓 **Unjail Validator** - Restore jailed validator
+- Create wallet & validator
+- Check balance & validator info
+- Delegate/Unbond tokens
+- Unjail validator
+- Set withdrawal address
 
-### 5️⃣ Bridge Management
-- 🌉 **Install Bridge Node** - Data availability bridge
-- 💼 **Bridge Wallet** - Manage bridge wallet
-- 🔄 **Update Bridge** - Update to latest version
-- 🔃 **Reset Bridge** - Troubleshooting
+### 5️⃣ Data Availability Nodes
+**Install & Manage:**
+- 🌉 **Bridge Node** - DA layer bridge (requires Core RPC + TIA)
+- 💾 **Full Storage Node** - Complete data storage (requires Core RPC)
+- 💡 **Light Node** - Lightweight verification (no RPC needed)
+
+**Operations:**
+- Check status & balance
+- Get Node ID & wallet
+- Update, reset, delete
+- View logs
 
 ### 6️⃣ Service Operations
-- ▶️ **Start/Stop/Restart** - Service control
-- 📜 **Check Logs** - Real-time monitoring
-- 🔧 **Enable/Disable** - Auto-start configuration
+Start/Stop/Restart/Enable/Disable services and view logs.
 
 ### 7️⃣ Status & Logs
-- 📊 Sync status monitoring
-- 📜 Real-time log viewing
-- 🔍 Service status check
+Real-time sync status, logs, and system checks.
 
 ---
 
 ## 💾 Snapshots
 
-**Posthuman Snapshots** (recommended):
-- 📍 URL: https://snapshots.posthuman.digital/celestia-mainnet/
-- 📦 Pruned snapshot: ~5-6 GB
+**PostHuman Snapshots:**
+- 📍 https://snapshots.posthuman.digital/celestia-mainnet/
+- 📍 https://snapshots.posthuman.digital/celestia-testnet/
 - ⏱️ Updated every 24 hours
-- 🌐 Served via Cloudflare R2 (fast worldwide)
-- ✅ Includes metadata: `snapshot.json`
-
-**Benefits:**
-- ⚡ Sync in minutes instead of days
-- 💾 Save bandwidth and disk I/O
-- ✅ Verified and maintained by PostHuman
-- 🔄 Always up-to-date
+- 🌐 Fast worldwide delivery via Cloudflare R2
 
 **Manual snapshot restore:**
 ```bash
 export CELESTIA_HOME="$HOME/.celestia-app"
-export SERVICE_NAME="celestia-appd"
-
-sudo systemctl stop "${SERVICE_NAME}"
+sudo systemctl stop celestia-appd
 cp "${CELESTIA_HOME}/data/priv_validator_state.json" "${CELESTIA_HOME}/priv_validator_state.json.backup"
 rm -rf "${CELESTIA_HOME}/data"
-
-curl -fL https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst | \
-  tar -I zstd -xf - -C "${CELESTIA_HOME}"
-
+curl -L https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst | tar -I zstd -xf - -C "${CELESTIA_HOME}"
 mv "${CELESTIA_HOME}/priv_validator_state.json.backup" "${CELESTIA_HOME}/data/priv_validator_state.json"
-sudo systemctl restart "${SERVICE_NAME}" && sudo journalctl -u "${SERVICE_NAME}" -f
+sudo systemctl restart celestia-appd && sudo journalctl -u celestia-appd -f
 ```
 
 ---
 
 ## 📊 System Requirements
 
-### Validator / Consensus Node (Official)
-- **CPU**: 16 cores
-- **RAM**: 32 GB
-- **Disk**: 2 TiB NVMe SSD
-- **Network**: 1 Gbps connection
-- **OS**: Ubuntu 20.04+ or similar Linux
-
-**Note**: These are official Celestia requirements for validator nodes. Non-validator full nodes may work with lower specs but are not recommended for production use.
-
-### Archive Node
-- **CPU**: 8+ cores
-- **RAM**: 24 GB+
-- **Disk**: 3 TB+ NVMe SSD
-- **Network**: 1 Gbps connection
+| Node Type | CPU | RAM | Disk | Network |
+|-----------|-----|-----|------|---------|
+| **Validator** | 16 cores | 32 GB | 2 TB NVMe | 1 Gbps |
+| **Archive** | 8+ cores | 24 GB | 3+ TB NVMe | 1 Gbps |
+| **Bridge** | 4+ cores | 8 GB | 500+ GB SSD | 100 Mbps |
+| **Full Storage** | 4+ cores | 8 GB | 500+ GB SSD | 100 Mbps |
+| **Light** | 2+ cores | 2 GB | 50+ GB SSD | 25 Mbps |
 
 ---
 
-## 🔄 Update Guide
+## 🔗 PostHuman Services
 
-### When to Update?
-- 🚨 Network upgrade announced
-- 🐛 Critical bug fixes
-- ✨ New features
-- 📢 Monitor [Celestia Discord](https://discord.com/invite/celestiacommunity)
-
-### Using the Script:
-1. Run: `./celestia-manager.sh`
-2. Select **"2. Update Node"**
-3. Press Enter for recommended version (v5.0.11)
-4. Confirm update
-5. Wait 1-3 minutes
-6. Done! ✅
-
-### Manual Update:
-```bash
-sudo systemctl stop celestia-appd
-cd ~/celestia-app
-git fetch --all
-git checkout tags/v5.0.11
-make install
-celestia-appd version
-sudo systemctl restart celestia-appd
-sudo journalctl -u celestia-appd -f
-```
-
----
-
-## 🔗 Resources
-
-### PostHuman Services
+### Mainnet (celestia)
 - 🌐 **Website**: https://posthuman.digital
-- 📊 **Explorer**: https://celestia-explorer.posthuman.digital
-- 🔌 **RPC**: https://rpc-celestia-mainnet.posthuman.digital
-- 🔌 **REST**: https://rest-celestia-mainnet.posthuman.digital
-- 🔌 **gRPC**: https://grpc-celestia-mainnet.posthuman.digital
+- 📊 **Explorer**: https://explorer.posthuman.digital/celestia
+- 🔌 **RPC**: https://celestia-rpc.posthuman.digital
+- 🔌 **API**: https://celestia-api.posthuman.digital
+- 🔌 **gRPC**: celestia-grpc.posthuman.digital:443
 - 💾 **Snapshots**: https://snapshots.posthuman.digital/celestia-mainnet/
-- 🌐 **Peer**: `2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656`
+- 🌐 **Peer**: `2cc7330049bc02e4276668c414222593d52eb718@celestia-peer.posthuman.digital:26656`
+- 🌐 **Addrbook**: https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json
 
-### Official Celestia
+### Testnet (mocha-4)
+- 📊 **Explorer**: https://explorer.posthuman.digital/celestia-testnet
+- 🔌 **RPC**: https://celestia-testnet-rpc.posthuman.digital
+- 🔌 **API**: https://celestia-testnet-api.posthuman.digital
+- 🔌 **gRPC**: celestia-testnet-grpc.posthuman.digital:443
+- 💾 **Snapshots**: https://snapshots.posthuman.digital/celestia-testnet/
+- 🌐 **Addrbook**: https://snapshots.posthuman.digital/celestia-testnet/addrbook.json
+
+---
+
+## 🛡️ Official Celestia Resources
+
 - 📚 **Docs**: https://docs.celestia.org
 - 💬 **Discord**: https://discord.com/invite/celestiacommunity
-- 🐦 **Twitter**: https://twitter.com/CelestiaOrg
+- 🐦 **X (Twitter)**: https://x.com/CelestiaOrg
 - 💻 **GitHub**: https://github.com/celestiaorg/celestia-app
-
----
-
-## 🛡️ Security
-
-- 🔐 **Backup Keys**: Always backup `~/.celestia-app/config/priv_validator_key.json`
-- 🔥 **Firewall**: Use the script's firewall configuration
-- 🔑 **SSH**: Use key-based authentication
-- 👁️ **Monitoring**: Setup alerts for downtime
-- 💰 **Never share**: Private keys or seed phrases
+- 📊 **Explorer**: https://celestiascan.com
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Node not syncing?
+**Node not syncing?**
 ```bash
-# Check logs
 sudo journalctl -u celestia-appd -f -n 100
-
-# Check sync status
 celestia-appd status 2>&1 | jq .SyncInfo
 ```
 
-### REST API not working?
-- Known issue in v5.x
-- Use gRPC instead: `grpcurl -plaintext localhost:9090 list`
-- See [troubleshooting guide](https://github.com/Validator-POSTHUMAN/celestia-oneliner/issues)
-
-### Service won't start?
+**Service won't start?**
 ```bash
-# Check service status
 sudo systemctl status celestia-appd
-
-# View recent logs
 sudo journalctl -u celestia-appd -n 50 --no-pager
 ```
+
+**Check sync status:**
+```bash
+./celestia-manager.sh
+# Select: 7 (Status & Logs) → 2 (Check Sync Status)
+```
+
+---
+
+## 🆕 Features
+
+### Network Selection
+Supports both Mainnet and Testnet:
+```bash
+export NETWORK_TYPE=testnet  # or mainnet (default)
+./celestia-manager.sh
+```
+
+### Custom Installation Directory
+Install to custom location:
+```bash
+export CELESTIA_HOME=/mnt/data/.celestia-app
+./celestia-manager.sh
+```
+
+### DA Nodes Management
+Complete suite for Data Availability nodes:
+- Main Menu → Option 5 → Option 1 (Install DA Node)
+- Support for Bridge, Full Storage, and Light nodes
+- Unified management interface
+
+---
+
+## 🔄 Quick Update
+
+```bash
+./celestia-manager.sh
+# Select: 2 (Update Node) → Press Enter for latest version
+```
+
+---
+
+## 🛡️ Security Best Practices
+
+- 🔐 Backup `~/.celestia-app/config/priv_validator_key.json`
+- 🔥 Use script's firewall configuration (Option 3 → 5)
+- 🔑 Enable SSH key-based authentication
+- 👁️ Setup monitoring and alerts
+- 💰 Never share private keys or seed phrases
 
 ---
 
 ## 📝 License
 
-MIT License - provided by [PostHuman Validator](https://posthuman.digital)
+MIT License - [PostHuman Validator](https://posthuman.digital)
 
 **Support:**
-- GitHub Issues: [celestia-oneliner repository](https://github.com/Validator-POSTHUMAN/celestia-oneliner)
-- Discord: PostHuman community
+- 🐛 GitHub Issues: https://github.com/Validator-POSTHUMAN/celestia-oneliner
+- 💬 Discord: PostHuman Community
+- 📧 Contact: https://posthuman.digital
 
 ---
 
-**Version:** v5.0.11 | **Chain ID:** celestia | **Last Updated:** 2025-01-11
+**Version:** 1.1.0 | **Last Updated:** 2025-01-11
 
-## 🆕 New Features
-
-### Network Selection
-The script now supports both **Mainnet** and **Testnet** (Mocha-4):
-
-```bash
-# Set network before running script
-export NETWORK_TYPE=testnet  # or mainnet (default)
-./celestia-manager.sh
-```
-
-Or select interactively when installing a node.
-
-**Mainnet** (celestia):
-- Version: v5.0.11
-- Chain ID: celestia
-- Snapshots: snapshots.posthuman.digital/celestia-mainnet/
-
-**Testnet** (mocha-4):
-- Version: v6.2.0-mocha
-- Chain ID: mocha-4
-- Snapshots: snapshots.posthuman.digital/celestia-testnet/
-
-### Custom Installation Directory
-Install to a custom directory (e.g., separate disk):
-
-```bash
-# Set custom directory before running
-export CELESTIA_HOME=/mnt/nvme/.celestia-app
-./celestia-manager.sh
-```
-
-Or select interactively during installation.
-
-**Use cases:**
-- Install on a larger/faster disk
-- Multiple nodes on same server
-- Custom backup/mount points
-
-### Delete Node
-Safely remove your Celestia node:
-- Stops and disables service
-- Removes binary and service files
-- Optionally removes data directory
-- Cleans environment variables
-
-Access via: **Node Operations Menu → Option 10**
-
+🚀 **Happy Node Running!**

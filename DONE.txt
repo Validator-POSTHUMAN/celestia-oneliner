@@ -1,0 +1,68 @@
+✅ ВСЕ ИЗМЕНЕНИЯ ЗАВЕРШЕНЫ
+
+═══════════════════════════════════════════════════════════
+
+1. ОСНОВНОЙ СКРИПТ (celestia-manager.sh)
+   ✅ Заменил "Bridge Management" → "Data Availability Nodes"
+   ✅ Добавил поддержку 3 типов DA нод (Bridge, Full Storage, Light)
+   ✅ Разделил установку: консенсус отдельно, DA отдельно
+   ✅ Исправил проверку диска - теперь проверяет выбранную директорию
+   ✅ Исправил команды celestia-appd config - используется client.toml напрямую
+   ✅ Исправил download-genesis для testnet и mainnet
+
+2. README.md
+   ✅ Сокращен 300→217 строк
+   ✅ Добавлен TRUE ONE-LINER с tmux
+   ✅ Обновлены PostHuman endpoints (mainnet + testnet)
+   ✅ Актуализирована информация о DA нодах
+
+3. POSTHUMAN-SOURCE-DATA
+   ✅ /celestia/one-liner.md - обновлен
+   ✅ /celestia-testnet/one-liner.md - обновлен
+   ✅ Актуальные endpoints для mainnet и testnet
+   ✅ Информация о DA нодах добавлена
+
+═══════════════════════════════════════════════════════════
+
+ONE-LINER КОМАНДЫ:
+
+С tmux (рекомендуется):
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh -o celestia-manager.sh && chmod +x celestia-manager.sh && tmux new-session -d -s celestia './celestia-manager.sh' && tmux attach-session -t celestia
+
+Без tmux:
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh -o celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
+
+═══════════════════════════════════════════════════════════
+
+ENDPOINTS ОБНОВЛЕНЫ:
+
+MAINNET:
+- RPC: https://celestia-rpc.posthuman.digital
+- API: https://celestia-api.posthuman.digital
+- gRPC: celestia-grpc.posthuman.digital:443
+- Peer: 2cc7330049bc02e4276668c414222593d52eb718@celestia-peer.posthuman.digital:26656
+
+TESTNET:
+- RPC: https://celestia-testnet-rpc.posthuman.digital
+- API: https://celestia-testnet-api.posthuman.digital
+- gRPC: celestia-testnet-grpc.posthuman.digital:443
+
+═══════════════════════════════════════════════════════════
+
+ИСПРАВЛЕННЫЕ ПРОБЛЕМЫ:
+
+1. ✅ Команды celestia-appd config - используют sed для client.toml
+2. ✅ Genesis для testnet - download-genesis только для testnet
+3. ✅ Genesis для mainnet - wget из PostHuman
+4. ✅ Проверка диска - проверяет $CELESTIA_HOME, не только /
+5. ✅ DA ноды - отдельное меню установки
+
+═══════════════════════════════════════════════════════════
+
+ФАЙЛЫ:
+- celestia-manager.sh ✓ (88K)
+- README.md ✓ (217 строк, короче!)
+- posthuman-source-data/celestia/one-liner.md ✓
+- posthuman-source-data/celestia-testnet/one-liner.md ✓
+
+✅ ВСЁ ГОТОВО К ИСПОЛЬЗОВАНИЮ!
