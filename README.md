@@ -6,17 +6,17 @@ One-line automated installation and management tool for Celestia nodes (Mainnet 
 
 **One-liner (recommended):**
 ```bash
-curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh | bash
-```
-
-**Download and run:**
-```bash
 curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh > celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
 ```
 
 **With screen (persistent session):**
 ```bash
-screen -S celestia bash -c "curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh | bash"
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh > celestia-manager.sh && chmod +x celestia-manager.sh && screen -S celestia ./celestia-manager.sh
+```
+
+**Quick run (auto-cleanup):**
+```bash
+bash -c "$(curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh)"
 ```
 
 **Current Versions:**
