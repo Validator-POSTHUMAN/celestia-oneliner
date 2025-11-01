@@ -673,7 +673,7 @@ install_snapshot() {
     if [ "$node_type" = "pruned" ]; then
         echo "Downloading pruned snapshot..."
         rm -rf $CELESTIA_HOME/data
-        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $CELESTIA_HOME
+        curl -L "$SNAPSHOT_PRUNED" | zstd -d | tar -xf - -C "$CELESTIA_HOME"
     else
         echo "⚠️  Archive snapshot will take several hours to download."
         echo "It's recommended to use tmux for this operation."
