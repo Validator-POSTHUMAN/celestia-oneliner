@@ -221,3 +221,52 @@ MIT License - provided by [PostHuman Validator](https://posthuman.digital)
 ---
 
 **Version:** v5.0.11 | **Chain ID:** celestia | **Last Updated:** 2025-01-11
+
+## 🆕 New Features
+
+### Network Selection
+The script now supports both **Mainnet** and **Testnet** (Mocha-4):
+
+```bash
+# Set network before running script
+export NETWORK_TYPE=testnet  # or mainnet (default)
+./celestia-manager.sh
+```
+
+Or select interactively when installing a node.
+
+**Mainnet** (celestia):
+- Version: v5.0.11
+- Chain ID: celestia
+- Snapshots: snapshots.posthuman.digital/celestia-mainnet/
+
+**Testnet** (mocha-4):
+- Version: v6.2.0-mocha
+- Chain ID: mocha-4
+- Snapshots: snapshots.posthuman.digital/celestia-testnet/
+
+### Custom Installation Directory
+Install to a custom directory (e.g., separate disk):
+
+```bash
+# Set custom directory before running
+export CELESTIA_HOME=/mnt/nvme/.celestia-app
+./celestia-manager.sh
+```
+
+Or select interactively during installation.
+
+**Use cases:**
+- Install on a larger/faster disk
+- Multiple nodes on same server
+- Custom backup/mount points
+
+### Delete Node
+Safely remove your Celestia node:
+- Stops and disables service
+- Removes binary and service files
+- Optionally removes data directory
+- Cleans environment variables
+
+Access via: **Node Operations Menu → Option 10**
+

@@ -12,12 +12,19 @@ MIN_CPU_CORES=16
 MIN_RAM_MB=32000
 MIN_DISK_GB=2000
 GO_VERSION="1.24.1"
-APP_VERSION="v5.0.11"
-BRIDGE_VERSION="v0.21.5"
-DEFAULT_CHAIN_ID="celestia"
 
-# Snapshot URLs
-SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
+# Network Type (can be set via environment: export NETWORK_TYPE=testnet)
+NETWORK_TYPE="${NETWORK_TYPE:-mainnet}"
+CELESTIA_HOME="${CELESTIA_HOME:-$HOME/.celestia-app}"
+
+# Network-specific configuration (set by configure_network function)
+APP_VERSION=""
+DEFAULT_CHAIN_ID=""
+SNAPSHOT_PRUNED=""
+GENESIS_URL=""
+ADDRBOOK_URL=""
+RPC_URL=""
+BRIDGE_VERSION="v0.21.5"
 SNAPSHOT_ARCHIVE="https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
 SNAPSHOT_BRIDGE="https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
 
@@ -72,6 +79,87 @@ EOF
         echo "❌ Failed to enable BBR"
         return 1
     fi
+}
+
+
+# Configure network-specific variables
+configure_network() {
+    if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
+        APP_VERSION="v5.0.11"
+        DEFAULT_CHAIN_ID="celestia"
+        SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
+        GENESIS_URL="https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
+        ADDRBOOK_URL="https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
+        RPC_URL="https://rpc-celestia-mainnet.posthuman.digital"
+        PEERS="2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
+    elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
+        APP_VERSION="v6.2.0-mocha"
+        DEFAULT_CHAIN_ID="mocha-4"
+        SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-testnet/snapshot-latest.tar.zst"
+        GENESIS_URL="https://snapshots.posthuman.digital/celestia-testnet/genesis.json"
+        ADDRBOOK_URL="https://snapshots.posthuman.digital/celestia-testnet/addrbook.json"
+        RPC_URL="https://rpc-celestia-testnet.posthuman.digital"
+        PEERS=""
+    fi
+}
+
+# Select network type
+select_network() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║     Select Network Type      ║"
+    echo "╚══════════════════════════════╝"
+    echo "  1. Mainnet (celestia)"
+    echo "  2. Testnet (mocha-4)"
+    echo ""
+    echo "  Current: $NETWORK_TYPE"
+    echo ""
+    read -rp "Enter your choice [1-2] or press Enter to keep current: " net_choice
+    
+    case $net_choice in
+        1) export NETWORK_TYPE="mainnet" ;;
+        2) export NETWORK_TYPE="testnet" ;;
+        "") ;;  # Keep current
+        *) echo "Invalid choice. Keeping current: $NETWORK_TYPE" ;;
+    esac
+    
+    configure_network
+    echo -e "\n✅ Network: $NETWORK_TYPE"
+    echo "   Chain ID: $DEFAULT_CHAIN_ID"
+    echo "   Version: $APP_VERSION"
+}
+
+# Select custom installation directory
+select_custom_directory() {
+    echo -e "\n╔══════════════════════════════╗"
+    echo "║   Installation Directory     ║"
+    echo "╚══════════════════════════════╝"
+    echo ""
+    echo "Default: $CELESTIA_HOME"
+    echo "Current: $CELESTIA_HOME"
+    echo ""
+    read -rp "Use custom directory? (y/N): " use_custom
+    
+    if [[ "$use_custom" == "y" || "$use_custom" == "Y" ]]; then
+        read -rp "Enter directory path (e.g., /mnt/nvme/.celestia-app): " custom_dir
+        if [[ -n "$custom_dir" ]]; then
+            export CELESTIA_HOME="$custom_dir"
+            echo "✅ Will use: $CELESTIA_HOME"
+            
+            if [[ ! -d "$CELESTIA_HOME" ]]; then
+                read -rp "Directory doesn't exist. Create it? (y/N): " create_dir
+                if [[ "$create_dir" == "y" || "$create_dir" == "Y" ]]; then
+                    mkdir -p "$CELESTIA_HOME" || {
+                        echo "❌ Failed to create directory"
+                        export CELESTIA_HOME="$CELESTIA_HOME"
+                        return 1
+                    }
+                    echo "✅ Directory created"
+                fi
+            fi
+        fi
+    fi
+    
+    echo "📁 Installation directory: $CELESTIA_HOME"
 }
 
 check_system_requirements() {
@@ -257,8 +345,8 @@ install_node_consensus() {
     celestia-appd download-genesis $CELESTIA_CHAIN_ID
 
     # Download genesis and addrbook
-    wget -O $HOME/.celestia-app/config/genesis.json "$GENESIS_URL"
-    wget -O $HOME/.celestia-app/config/addrbook.json "$ADDRBOOK_URL"
+    wget -O $CELESTIA_HOME/config/genesis.json "$GENESIS_URL"
+    wget -O $CELESTIA_HOME/config/addrbook.json "$ADDRBOOK_URL"
 
     # Set custom ports first
     sed -i.bak -e "s%:26658%:${CELESTIA_PORT}658%g;
@@ -266,36 +354,36 @@ install_node_consensus() {
     s%:6060%:${CELESTIA_PORT}060%g;
     s%:26656%:${CELESTIA_PORT}656%g;
     s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${CELESTIA_PORT}656\"%;
-    s%:26660%:${CELESTIA_PORT}660%g" $HOME/.celestia-app/config/config.toml
+    s%:26660%:${CELESTIA_PORT}660%g" $CELESTIA_HOME/config/config.toml
 
     # Then update the SEEDS and PEERS variables with correct ports
     local updated_seeds=$(echo "$SEEDS" | sed "s/:26656/:${CELESTIA_PORT}656/g")
 
     # Set seeds and peers after port configuration
     sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$updated_seeds\"/}" \
-           -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.celestia-app/config/config.toml
+           -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $CELESTIA_HOME/config/config.toml
 
     # Configure pruning based on node type
     echo "Configuring pruning settings for $node_type node..."
     if [ "$node_type" = "pruned" ]; then
-        sed -i -e "s/^pruning *=.*/pruning = \"custom\"/" $HOME/.celestia-app/config/app.toml
-        sed -i -e "s/^pruning-keep-recent *=.*/pruning-keep-recent = \"100\"/" $HOME/.celestia-app/config/app.toml
-        sed -i -e "s/^pruning-interval *=.*/pruning-interval = \"19\"/" $HOME/.celestia-app/config/app.toml
+        sed -i -e "s/^pruning *=.*/pruning = \"custom\"/" $CELESTIA_HOME/config/app.toml
+        sed -i -e "s/^pruning-keep-recent *=.*/pruning-keep-recent = \"100\"/" $CELESTIA_HOME/config/app.toml
+        sed -i -e "s/^pruning-interval *=.*/pruning-interval = \"19\"/" $CELESTIA_HOME/config/app.toml
     else
-        sed -i -e "s/^pruning *=.*/pruning = \"nothing\"/" $HOME/.celestia-app/config/app.toml
+        sed -i -e "s/^pruning *=.*/pruning = \"nothing\"/" $CELESTIA_HOME/config/app.toml
     fi
 
     # Configure indexer
     echo "Setting indexer to ${indexer_type}..."
     if [ "$indexer_type" = "on" ]; then
-        sed -i -e "s/^indexer *=.*/indexer = \"kv\"/" $HOME/.celestia-app/config/config.toml
+        sed -i -e "s/^indexer *=.*/indexer = \"kv\"/" $CELESTIA_HOME/config/config.toml
     else
-        sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.celestia-app/config/config.toml
+        sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $CELESTIA_HOME/config/config.toml
     fi
 
     # Set minimum gas price and enable prometheus
-    sed -i 's|minimum-gas-prices =.*|minimum-gas-prices = "0.002utia"|g' $HOME/.celestia-app/config/app.toml
-    sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.celestia-app/config/config.toml
+    sed -i 's|minimum-gas-prices =.*|minimum-gas-prices = "0.002utia"|g' $CELESTIA_HOME/config/app.toml
+    sed -i -e "s/prometheus = false/prometheus = true/" $CELESTIA_HOME/config/config.toml
 
     # Create service file
     echo "Creating systemd service..."
@@ -305,8 +393,8 @@ Description=Celestia node
 After=network-online.target
 [Service]
 User=$USER
-WorkingDirectory=$HOME/.celestia-app
-ExecStart=$(which celestia-appd) start --home $HOME/.celestia-app
+WorkingDirectory=$CELESTIA_HOME
+ExecStart=$(which celestia-appd) start --home $CELESTIA_HOME
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
@@ -316,9 +404,9 @@ EOF
 
     # Reset and download snapshot
     echo "Downloading snapshot..."
-    celestia-appd tendermint unsafe-reset-all --home $HOME/.celestia-app
+    celestia-appd tendermint unsafe-reset-all --home $CELESTIA_HOME
     if curl -s --head curl $SNAPSHOT_PRUNED | head -n 1 | grep "200" > /dev/null; then
-        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $HOME/.celestia-app
+        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $CELESTIA_HOME
     else
         echo "No snapshot found"
     fi
@@ -513,7 +601,7 @@ install_snapshot() {
 
     # Detect node type
     local node_type
-    if grep -q "^pruning = \"nothing\"" "$HOME/.celestia-app/config/app.toml"; then
+    if grep -q "^pruning = \"nothing\"" "$CELESTIA_HOME/config/app.toml"; then
         node_type="archive"
     else
         node_type="pruned"
@@ -538,33 +626,33 @@ install_snapshot() {
     # Backup validator state
     echo "Stopping node and backing up validator state..."
     sudo systemctl stop celestia-appd
-    cp $HOME/.celestia-app/data/priv_validator_state.json $HOME/.celestia-app/priv_validator_state.json.backup 2>/dev/null || true
+    cp $CELESTIA_HOME/data/priv_validator_state.json $CELESTIA_HOME/priv_validator_state.json.backup 2>/dev/null || true
 
     if [ "$node_type" = "pruned" ]; then
         echo "Downloading pruned snapshot..."
-        rm -rf $HOME/.celestia-app/data
-        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $HOME/.celestia-app
+        rm -rf $CELESTIA_HOME/data
+        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $CELESTIA_HOME
     else
         echo "⚠️  Archive snapshot will take several hours to download."
         echo "It's recommended to use tmux for this operation."
 
         # Disable statesync to avoid sync issues
-        sed -i.bak -E "s|^(enable[[:space:]]+=[[:space:]]+).*$|\1false|" $HOME/.celestia-app/config/config.toml
+        sed -i.bak -E "s|^(enable[[:space:]]+=[[:space:]]+).*$|\1false|" $CELESTIA_HOME/config/config.toml
 
         echo "Downloading archive snapshot..."
         cd $HOME
         aria2c -x 16 -s 16 -o celestia-archive-snap.tar.lz4 $SNAPSHOT_ARCHIVE
 
         echo "Extracting archive snapshot..."
-        rm -rf $HOME/.celestia-app/data
-        tar -I lz4 -xvf ~/celestia-archive-snap.tar.lz4 -C $HOME/.celestia-app
+        rm -rf $CELESTIA_HOME/data
+        tar -I lz4 -xvf ~/celestia-archive-snap.tar.lz4 -C $CELESTIA_HOME
         rm ~/celestia-archive-snap.tar.lz4
     fi
 
     # Restore validator state if backup exists
-    if [ -f "$HOME/.celestia-app/priv_validator_state.json.backup" ]; then
+    if [ -f "$CELESTIA_HOME/priv_validator_state.json.backup" ]; then
         echo "Restoring validator state..."
-        mv $HOME/.celestia-app/priv_validator_state.json.backup $HOME/.celestia-app/data/priv_validator_state.json
+        mv $CELESTIA_HOME/priv_validator_state.json.backup $CELESTIA_HOME/data/priv_validator_state.json
     fi
 
     # Restart node
@@ -713,7 +801,7 @@ toggle_rpc() {
     CELESTIA_PORT=${CELESTIA_PORT:-"40"}
 
     # Check current RPC status from config.toml
-    local rpc_address=$(grep "^laddr = " "$HOME/.celestia-app/config/config.toml" | grep "tcp://" | cut -d'"' -f2)
+    local rpc_address=$(grep "^laddr = " "$CELESTIA_HOME/config/config.toml" | grep "tcp://" | cut -d'"' -f2)
     local is_enabled=$(echo "$rpc_address" | grep -c "0.0.0.0")
 
     echo "Current RPC status:"
@@ -728,14 +816,14 @@ toggle_rpc() {
     if [ "$is_enabled" -eq 1 ]; then
         echo "Disabling external RPC access..."
         # Change from 0.0.0.0 to 127.0.0.1
-        sed -i 's|^laddr = "tcp://0.0.0.0:'${CELESTIA_PORT}'657"|laddr = "tcp://127.0.0.1:'${CELESTIA_PORT}'657"|' "$HOME/.celestia-app/config/config.toml"
+        sed -i 's|^laddr = "tcp://0.0.0.0:'${CELESTIA_PORT}'657"|laddr = "tcp://127.0.0.1:'${CELESTIA_PORT}'657"|' "$CELESTIA_HOME/config/config.toml"
         # Remove firewall rule
         sudo ufw delete allow "${CELESTIA_PORT}657" 2>/dev/null || true
         echo "✅ RPC restricted to localhost and port closed"
     else
         echo "Enabling external RPC access..."
         # Change from 127.0.0.1 to 0.0.0.0
-        sed -i 's|^laddr = "tcp://127.0.0.1:'${CELESTIA_PORT}'657"|laddr = "tcp://0.0.0.0:'${CELESTIA_PORT}'657"|' "$HOME/.celestia-app/config/config.toml"
+        sed -i 's|^laddr = "tcp://127.0.0.1:'${CELESTIA_PORT}'657"|laddr = "tcp://0.0.0.0:'${CELESTIA_PORT}'657"|' "$CELESTIA_HOME/config/config.toml"
         # Add firewall rule
         sudo ufw allow "${CELESTIA_PORT}657" comment 'Celestia RPC port'
         echo "✅ RPC enabled for external access and port opened"
@@ -756,10 +844,10 @@ toggle_grpc() {
         CELESTIA_PORT=${CELESTIA_PORT:-"40"}
 
         # Get values using awk for more reliable parsing
-        local grpc_enabled=$(awk '/^\[grpc\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$HOME/.celestia-app/config/app.toml")
-        local grpc_address=$(awk '/^\[grpc\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$HOME/.celestia-app/config/app.toml")
-        local grpc_web_enabled=$(awk '/^\[grpc-web\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$HOME/.celestia-app/config/app.toml")
-        local grpc_web_address=$(awk '/^\[grpc-web\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$HOME/.celestia-app/config/app.toml")
+        local grpc_enabled=$(awk '/^\[grpc\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$CELESTIA_HOME/config/app.toml")
+        local grpc_address=$(awk '/^\[grpc\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$CELESTIA_HOME/config/app.toml")
+        local grpc_web_enabled=$(awk '/^\[grpc-web\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$CELESTIA_HOME/config/app.toml")
+        local grpc_web_address=$(awk '/^\[grpc-web\]/{f=1;next}/^\[/{f=0}f&&/^address =/{gsub(/"/, "");print $3}' "$CELESTIA_HOME/config/app.toml")
 
         echo "Current status:"
         echo "gRPC enabled: $grpc_enabled"
@@ -777,14 +865,14 @@ toggle_grpc() {
             1)
                 if [ "$grpc_enabled" = "true" ] && [[ "$grpc_address" == *"0.0.0.0"* ]]; then
                     echo "Disabling gRPC..."
-                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = false/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'090"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw delete allow "${CELESTIA_PORT}090" 2>/dev/null || true
                     echo "✅ gRPC disabled and port closed"
                 else
                     echo "Enabling gRPC..."
-                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = true/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'090"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw allow "${CELESTIA_PORT}090" comment 'Celestia gRPC port'
                     echo "✅ gRPC enabled and port opened"
                 fi
@@ -794,14 +882,14 @@ toggle_grpc() {
             2)
                 if [ "$grpc_web_enabled" = "true" ] && [[ "$grpc_web_address" == *"0.0.0.0"* ]]; then
                     echo "Disabling gRPC-web..."
-                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = false/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'091"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw delete allow "${CELESTIA_PORT}091" 2>/dev/null || true
                     echo "✅ gRPC-web disabled and port closed"
                 else
                     echo "Enabling gRPC-web..."
-                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = true/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'091"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw allow "${CELESTIA_PORT}091" comment 'Celestia gRPC-web port'
                     echo "✅ gRPC-web enabled and port opened"
                 fi
@@ -812,14 +900,14 @@ toggle_grpc() {
                 # Handle gRPC
                 if [ "$grpc_enabled" = "true" ] && [[ "$grpc_address" == *"0.0.0.0"* ]]; then
                     echo "Disabling gRPC..."
-                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = false/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'090"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw delete allow "${CELESTIA_PORT}090" 2>/dev/null || true
                     echo "✅ gRPC disabled and port closed"
                 else
                     echo "Enabling gRPC..."
-                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'090"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s/^enable = .*/enable = true/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'090"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw allow "${CELESTIA_PORT}090" comment 'Celestia gRPC port'
                     echo "✅ gRPC enabled and port opened"
                 fi
@@ -827,14 +915,14 @@ toggle_grpc() {
                 # Handle gRPC-web
                 if [ "$grpc_web_enabled" = "true" ] && [[ "$grpc_web_address" == *"0.0.0.0"* ]]; then
                     echo "Disabling gRPC-web..."
-                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = false/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = false/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "127.0.0.1:'${CELESTIA_PORT}'091"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw delete allow "${CELESTIA_PORT}091" 2>/dev/null || true
                     echo "✅ gRPC-web disabled and port closed"
                 else
                     echo "Enabling gRPC-web..."
-                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = true/' "$HOME/.celestia-app/config/app.toml"
-                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'091"|' "$HOME/.celestia-app/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s/^enable = .*/enable = true/' "$CELESTIA_HOME/config/app.toml"
+                    sed -i '/^\[grpc-web\]/,/^\[/s|^address = .*|address = "0.0.0.0:'${CELESTIA_PORT}'091"|' "$CELESTIA_HOME/config/app.toml"
                     sudo ufw allow "${CELESTIA_PORT}091" comment 'Celestia gRPC-web port'
                     echo "✅ gRPC-web enabled and port opened"
                 fi
@@ -856,7 +944,7 @@ toggle_api() {
         check_node_installed || return 1
         source "$HOME/.bash_profile"
         CELESTIA_PORT=${CELESTIA_PORT:-"40"}
-        local config_file="$HOME/.celestia-app/config/app.toml"
+        local config_file="$CELESTIA_HOME/config/app.toml"
 
         # Get values using awk for more reliable parsing
         local api_enabled=$(awk '/^\[api\]/{f=1;next}/^\[/{f=0}f&&/^enable =/{print $3}' "$config_file")
@@ -949,7 +1037,7 @@ show_node_peer() {
 
     NODE_ID=$(celestia-appd tendermint show-node-id)
     IP=$(wget -qO- eth0.me)
-    PORT=$(grep -A1 "Address to listen for incoming connection" "$HOME/.celestia-app/config/config.toml" | tail -1 | cut -d':' -f2 | tr -d '"')
+    PORT=$(grep -A1 "Address to listen for incoming connection" "$CELESTIA_HOME/config/config.toml" | tail -1 | cut -d':' -f2 | tr -d '"')
 
     if [ -z "$NODE_ID" ] || [ -z "$IP" ] || [ -z "$PORT" ]; then
         echo "❌ Error getting node information"
@@ -1010,8 +1098,8 @@ delete_node() {
 
     # Remove data directory
     echo "Removing data directory..."
-    if [ -d "$HOME/.celestia-app" ]; then
-        sudo rm -rf "$HOME/.celestia-app" 2>/dev/null || true
+    if [ -d "$CELESTIA_HOME" ]; then
+        sudo rm -rf "$CELESTIA_HOME" 2>/dev/null || true
         echo "Data directory removed"
     else
         echo "Note: Data directory not found"
@@ -1534,7 +1622,7 @@ check_sync_status() {
     check_node_installed || return 1
 
     # Get RPC port from config
-    rpc_port=$(grep -m 1 -oP '^laddr = "\K[^"]+' "$HOME/.celestia-app/config/config.toml" | cut -d ':' -f 3)
+    rpc_port=$(grep -m 1 -oP '^laddr = "\K[^"]+' "$CELESTIA_HOME/config/config.toml" | cut -d ':' -f 3)
     if [ -z "$rpc_port" ]; then
         echo "❌ Error: Could not determine RPC port"
         return 1
@@ -1639,6 +1727,10 @@ service_disable() {
 ###################
 
 install_node_menu() {
+    # Select network and directory
+    select_network
+    select_custom_directory
+    
     while true; do
         echo -e "\n╔══════════════════════════════╗"
         echo "║      Install Node Menu       ║"
@@ -1871,6 +1963,9 @@ show_main_menu() {
     echo ""
     read -rp "Enter your choice [0-7]: " choice
 }
+
+# Initialize network configuration
+configure_network
 
 # Main menu loop
 while true; do
