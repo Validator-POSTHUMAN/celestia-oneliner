@@ -464,6 +464,19 @@ EOF
         echo "✓ Restored priv_validator_state.json"
     fi
 
+    # Create default priv_validator_state.json if not present
+    if [ ! -f "$CELESTIA_HOME/data/priv_validator_state.json" ]; then
+        echo "Creating default priv_validator_state.json..."
+        cat > "$CELESTIA_HOME/data/priv_validator_state.json" << 'PVSTATE'
+{
+  "height": "0",
+  "round": 0,
+  "step": 0
+}
+PVSTATE
+        echo "✓ Created priv_validator_state.json"
+    fi
+
     # Enable and start service
     echo "Starting Celestia node..."
     sudo systemctl daemon-reload
