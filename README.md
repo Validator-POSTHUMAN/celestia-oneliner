@@ -6,12 +6,12 @@ One-line automated installation and management tool for Celestia nodes (Mainnet 
 
 **Auto-start in tmux session:**
 ```bash
-curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh -o celestia-manager.sh && chmod +x celestia-manager.sh && tmux new-session -d -s celestia './celestia-manager.sh' && tmux attach-session -t celestia
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh > celestia-manager.sh && chmod +x celestia-manager.sh && tmux new-session -d -s celestia './celestia-manager.sh' && tmux attach-session -t celestia
 ```
 
 **Simple run (no tmux):**
 ```bash
-curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh -o celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
+curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh > celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
 ```
 
 **Current Versions:**
