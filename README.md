@@ -1,75 +1,220 @@
-# Celestia Node Setup Script by PostHuman Validator
+# Celestia Node Manager by PostHuman Validator
 
-This script is provided by PostHuman Validator to automate the setup and management of Celestia nodes. It simplifies installation, configuration, and maintenance, ensuring an efficient setup process.
+Automated installation and management tool for Celestia mainnet nodes.
 
-## Getting Started
+## 🚀 Quick Start
 
-To download, make the script executable, and run it, use the following command:
+Download and run the interactive script:
 
 ```bash
 curl -o celestia-manager.sh https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner/main/celestia-manager.sh && chmod +x celestia-manager.sh && ./celestia-manager.sh
 ```
 
-## Features
+**Network:** Celestia Mainnet  
+**Chain ID:** celestia  
+**Current Version:** v5.0.11  
+**Go Version:** 1.24.1
 
-### 1. Install Node (Full Setup)
-- Checks system requirements (CPU, RAM, and disk space) for compatibility.
-- Installs necessary dependencies like Go and other libraries.
-- Downloads and installs Celestia binaries.
-- Initializes the node on the Celestia network.
-- Configures the node with default settings, seeds, and peers.
-- Sets up systemd services to run Celestia as a background service.
+---
 
-### 2. Install Snapshot for Faster Sync
-- Provides options for installing a "Pruned" or "Archive" snapshot to speed up initial synchronization.
-- Downloads and extracts the selected snapshot.
-- Automatically backs up the `priv_validator_state.json` file and restores it after extraction.
-- Restarts the services to resume node operation.
+## 📋 Features
 
-### 3. Update Node
-- Downloads and installs the latest Celestia binaries.
-- Restarts the node services to apply the updates.
+### 1️⃣ Install Node (Full Setup)
+Complete automated installation with options:
+- ✅ **Pruned Node** (Indexer On/Off) - Recommended for validators
+- ✅ **Archive Node** (Indexer On/Off) - Full history
+- ✅ System requirements check
+- ✅ Dependency installation (Go, build tools)
+- ✅ Genesis & Addrbook from Posthuman snapshots
+- ✅ Optimized configuration (pruning, gas price, peers)
+- ✅ systemd service setup
 
-### 4. Create Validator
-- Initializes the node with a unique moniker.
-- Exports validator and EVM keys for wallet integration.
-- Ensures the node is fully synchronized before proceeding with validator creation.
+### 2️⃣ Update Node ⭐
+**Easy one-click update:**
+- 📊 Shows current version
+- 📦 Recommends latest stable version (v5.0.11)
+- ✅ Press Enter to use recommended version
+- 🛑 Graceful stop → Update → Restart
+- ✅ Version verification
+- 📜 Optional log viewing
 
-### 5. Validator Operations
-- **View Validator Info**: Displays details about the validator.
-- **Delegate Tokens**: Enables staking of tokens to the validator.
-- **Unstake Tokens**: Allows withdrawal of staked tokens.
-- **Set Withdrawal Address**: Configures the address for receiving rewards.
-- **Unjail Validator**: Restores a jailed validator back to active status.
+**Typical update time:** 1-3 minutes
 
-### 6. Node Operations
-- **Node Info**: Displays the current status and configuration of the node.
-- **Your Node Peer**: Shows the node's peer connection details.
-- **Firewall Configuration**: Sets up necessary firewall rules.
-- **Delete Node**: Removes the node's data and configuration.
+### 3️⃣ Node Operations
+- 📊 **Node Info** - Status and configuration
+- 🌐 **Your Node Peer** - Share your peer string
+- 🔥 **Firewall Configuration** - Secure your server
+- 🗑️ **Delete Node** - Complete removal
 
-### 7. Service Operations
-- **Start, Stop, Restart Service**: Controls Celestia services.
-- **Check Logs**: Monitors Celestia service logs in real time.
-- **Enable/Disable Service**: Configures automatic startup behavior.
+### 4️⃣ Validator Operations
+- 💰 **Create Validator** - Initialize your validator
+- 📊 **View Validator Info** - Status and voting power
+- 💸 **Delegate Tokens** - Self-delegation
+- 📤 **Unstake Tokens** - Unbond tokens
+- 🏦 **Set Withdrawal Address** - Configure rewards
+- 🔓 **Unjail Validator** - Restore jailed validator
 
-### 8. Bridge Node Setup
-- **Install Bridge Node**: Initializes a Celestia bridge node.
-- **Bridge Node Wallet**: Displays wallet information for bridge transactions.
-- **Update Bridge Node**: Updates the bridge node to the latest version.
-- **Reset Bridge Node**: Resets the bridge node for troubleshooting.
+### 5️⃣ Bridge Management
+- 🌉 **Install Bridge Node** - Data availability bridge
+- 💼 **Bridge Wallet** - Manage bridge wallet
+- 🔄 **Update Bridge** - Update to latest version
+- 🔃 **Reset Bridge** - Troubleshooting
 
-### 9. Advanced Operations
-- **Toggle RPC & gRPC**: Enables or disables public RPC and gRPC endpoints.
-- **Toggle API**: Controls API accessibility.
-- **Check Sync Status**: Monitors block synchronization progress.
+### 6️⃣ Service Operations
+- ▶️ **Start/Stop/Restart** - Service control
+- 📜 **Check Logs** - Real-time monitoring
+- 🔧 **Enable/Disable** - Auto-start configuration
 
-## System Requirements
+### 7️⃣ Status & Logs
+- 📊 Sync status monitoring
+- 📜 Real-time log viewing
+- 🔍 Service status check
 
-Minimum system requirements for running a Celestia node:
-- **CPU**: 8 cores
-- **RAM**: 24 GB
-- **Disk Space**: 3 TB (for archive node)
+---
 
-## License
-This script is provided by [PostHuman Validator](https://posthuman.digital).
+## 💾 Snapshots
+
+**Posthuman Snapshots** (recommended):
+- 📍 URL: https://snapshots.posthuman.digital/celestia-mainnet/
+- 📦 Pruned snapshot: ~5-6 GB
+- ⏱️ Updated every 24 hours
+- 🌐 Served via Cloudflare R2 (fast worldwide)
+- ✅ Includes metadata: `snapshot.json`
+
+**Benefits:**
+- ⚡ Sync in minutes instead of days
+- 💾 Save bandwidth and disk I/O
+- ✅ Verified and maintained by PostHuman
+- 🔄 Always up-to-date
+
+**Manual snapshot restore:**
+```bash
+export CELESTIA_HOME="$HOME/.celestia-app"
+export SERVICE_NAME="celestia-appd"
+
+sudo systemctl stop "${SERVICE_NAME}"
+cp "${CELESTIA_HOME}/data/priv_validator_state.json" "${CELESTIA_HOME}/priv_validator_state.json.backup"
+rm -rf "${CELESTIA_HOME}/data"
+
+curl -fL https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst | \
+  tar -I zstd -xf - -C "${CELESTIA_HOME}"
+
+mv "${CELESTIA_HOME}/priv_validator_state.json.backup" "${CELESTIA_HOME}/data/priv_validator_state.json"
+sudo systemctl restart "${SERVICE_NAME}" && sudo journalctl -u "${SERVICE_NAME}" -f
+```
+
+---
+
+## 📊 System Requirements
+
+### Validator / Full Node
+- **CPU**: 6+ cores (8+ recommended)
+- **RAM**: 8 GB minimum (16 GB recommended)
+- **Disk**: 500 GB NVMe SSD (1 TB recommended)
+- **Network**: 100 Mbps+ connection
+
+### Archive Node
+- **CPU**: 8+ cores
+- **RAM**: 24 GB+
+- **Disk**: 3 TB+ NVMe SSD
+- **Network**: 1 Gbps connection
+
+---
+
+## 🔄 Update Guide
+
+### When to Update?
+- 🚨 Network upgrade announced
+- 🐛 Critical bug fixes
+- ✨ New features
+- 📢 Monitor [Celestia Discord](https://discord.com/invite/celestiacommunity)
+
+### Using the Script:
+1. Run: `./celestia-manager.sh`
+2. Select **"2. Update Node"**
+3. Press Enter for recommended version (v5.0.11)
+4. Confirm update
+5. Wait 1-3 minutes
+6. Done! ✅
+
+### Manual Update:
+```bash
+sudo systemctl stop celestia-appd
+cd ~/celestia-app
+git fetch --all
+git checkout tags/v5.0.11
+make install
+celestia-appd version
+sudo systemctl restart celestia-appd
+sudo journalctl -u celestia-appd -f
+```
+
+---
+
+## 🔗 Resources
+
+### PostHuman Services
+- 🌐 **Website**: https://posthuman.digital
+- 📊 **Explorer**: https://celestia-explorer.posthuman.digital
+- 🔌 **RPC**: https://rpc-celestia-mainnet.posthuman.digital
+- 🔌 **REST**: https://rest-celestia-mainnet.posthuman.digital
+- 🔌 **gRPC**: https://grpc-celestia-mainnet.posthuman.digital
+- 💾 **Snapshots**: https://snapshots.posthuman.digital/celestia-mainnet/
+- 🌐 **Peer**: `2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656`
+
+### Official Celestia
+- 📚 **Docs**: https://docs.celestia.org
+- 💬 **Discord**: https://discord.com/invite/celestiacommunity
+- 🐦 **Twitter**: https://twitter.com/CelestiaOrg
+- 💻 **GitHub**: https://github.com/celestiaorg/celestia-app
+
+---
+
+## 🛡️ Security
+
+- 🔐 **Backup Keys**: Always backup `~/.celestia-app/config/priv_validator_key.json`
+- 🔥 **Firewall**: Use the script's firewall configuration
+- 🔑 **SSH**: Use key-based authentication
+- 👁️ **Monitoring**: Setup alerts for downtime
+- 💰 **Never share**: Private keys or seed phrases
+
+---
+
+## 🐛 Troubleshooting
+
+### Node not syncing?
+```bash
+# Check logs
+sudo journalctl -u celestia-appd -f -n 100
+
+# Check sync status
+celestia-appd status 2>&1 | jq .SyncInfo
+```
+
+### REST API not working?
+- Known issue in v5.x
+- Use gRPC instead: `grpcurl -plaintext localhost:9090 list`
+- See [troubleshooting guide](https://github.com/Validator-POSTHUMAN/celestia-oneliner/issues)
+
+### Service won't start?
+```bash
+# Check service status
+sudo systemctl status celestia-appd
+
+# View recent logs
+sudo journalctl -u celestia-appd -n 50 --no-pager
+```
+
+---
+
+## 📝 License
+
+MIT License - provided by [PostHuman Validator](https://posthuman.digital)
+
+**Support:**
+- GitHub Issues: [celestia-oneliner repository](https://github.com/Validator-POSTHUMAN/celestia-oneliner)
+- Discord: PostHuman community
+
+---
+
+**Version:** v5.0.11 | **Chain ID:** celestia | **Last Updated:** 2025-01-11

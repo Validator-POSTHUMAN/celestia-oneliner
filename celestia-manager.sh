@@ -8,22 +8,22 @@ set -euo pipefail
 # ------------------------------------------------
 
 # Global variables
-MIN_CPU_CORES=8
-MIN_RAM_MB=24000
-MIN_DISK_GB=3000
-GO_VERSION="1.23.4"
-APP_VERSION="v3.3.1"
+MIN_CPU_CORES=6
+MIN_RAM_MB=8000
+MIN_DISK_GB=500
+GO_VERSION="1.24.1"
+APP_VERSION="v5.0.11"
 BRIDGE_VERSION="v0.21.5"
 DEFAULT_CHAIN_ID="celestia"
 
 # Snapshot URLs
-SNAPSHOT_PRUNED="https://snapshots.celestia.posthuman.digital/data_latest.lz4"
+SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
 SNAPSHOT_ARCHIVE="https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
 SNAPSHOT_BRIDGE="https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
 
 # Network resources
-GENESIS_URL="https://raw.githubusercontent.com/celestiaorg/networks/master/celestia/genesis.json"
-ADDRBOOK_URL="https://raw.githubusercontent.com/celestiaorg/networks/master/celestia/addrbook.json"
+GENESIS_URL="https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
+ADDRBOOK_URL="https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
 
 # RPC URL
 RPC_URL="https://rpc.celestia-mainnet.posthuman.digital"
@@ -318,7 +318,7 @@ EOF
     echo "Downloading snapshot..."
     celestia-appd tendermint unsafe-reset-all --home $HOME/.celestia-app
     if curl -s --head curl $SNAPSHOT_PRUNED | head -n 1 | grep "200" > /dev/null; then
-        curl $SNAPSHOT_PRUNED | lz4 -dc - | tar -xf - -C $HOME/.celestia-app
+        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $HOME/.celestia-app
     else
         echo "No snapshot found"
     fi
@@ -543,7 +543,7 @@ install_snapshot() {
     if [ "$node_type" = "pruned" ]; then
         echo "Downloading pruned snapshot..."
         rm -rf $HOME/.celestia-app/data
-        curl $SNAPSHOT_PRUNED | lz4 -dc - | tar -xf - -C $HOME/.celestia-app
+        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $HOME/.celestia-app
     else
         echo "⚠️  Archive snapshot will take several hours to download."
         echo "It's recommended to use tmux for this operation."
@@ -584,30 +584,90 @@ update_node() {
     check_node_installed || return 1
     source "$HOME/.bash_profile"
 
-    read -rp "Enter version to update to (e.g. 3.3.1): " version_input
+    # Show current version
+    current_version=$(celestia-appd version 2>/dev/null || echo "unknown")
+    echo -e "\n📊 Current version: $current_version"
+    echo "📦 Recommended version: v5.0.11"
+    echo ""
+    
+    read -rp "Enter version to update to (press Enter for v5.0.11): " version_input
 
-    # Add 'v' prefix if not present
-    [[ $version_input != v* ]] && version_input="v$version_input"
+    # Use recommended version if empty
+    if [[ -z "$version_input" ]]; then
+        version_input="v5.0.11"
+        echo "✅ Using recommended version: $version_input"
+    else
+        # Add 'v' prefix if not present
+        [[ $version_input != v* ]] && version_input="v$version_input"
+    fi
 
-    # Update APP_VERSION in .bash_profile
-    sed -i "/APP_VERSION=/c\export APP_VERSION=$version_input" "$HOME/.bash_profile"
+    # Confirm update
+    echo ""
+    read -rp "Update from $current_version to $version_input? (y/N): " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        echo "❌ Update cancelled"
+        return 1
+    fi
+
+    # Update APP_VERSION in .bash_profile if exists
+    if grep -q "APP_VERSION=" "$HOME/.bash_profile" 2>/dev/null; then
+        sed -i "/APP_VERSION=/c\export APP_VERSION=$version_input" "$HOME/.bash_profile"
+    else
+        echo "export APP_VERSION=$version_input" >> "$HOME/.bash_profile"
+    fi
     source "$HOME/.bash_profile"
 
-    echo "Updating Celestia node to version $APP_VERSION..."
+    echo -e "\n⏳ Updating Celestia node to version $version_input..."
+    
+    # Stop service
+    echo "🛑 Stopping celestia-appd service..."
+    sudo systemctl stop celestia-appd
+
+    # Download and build
     cd "$HOME"
     rm -rf celestia-app
     git clone https://github.com/celestiaorg/celestia-app.git
     cd celestia-app/
-    git checkout tags/$APP_VERSION -b $APP_VERSION
-    make install
+    
+    if ! git checkout tags/$version_input -b $version_input 2>/dev/null; then
+        echo "❌ Version $version_input not found. Please check available versions."
+        sudo systemctl start celestia-appd
+        return 1
+    fi
+    
+    echo "🔨 Building binary..."
+    if ! make install; then
+        echo "❌ Build failed. Restarting old version..."
+        sudo systemctl start celestia-appd
+        return 1
+    fi
 
-    echo "Restarting celestia-appd service..."
+    # Verify version
+    new_version=$(celestia-appd version 2>/dev/null || echo "unknown")
+    echo -e "\n✅ New version installed: $new_version"
+
+    echo "🔄 Restarting celestia-appd service..."
     sudo systemctl restart celestia-appd
+    sleep 3
 
-    echo -e "\n✅ Node updated successfully to version $APP_VERSION"
-    echo "Showing logs (press Ctrl+C to exit)..."
-    sudo journalctl -u celestia-appd -f
+    if sudo systemctl is-active --quiet celestia-appd; then
+        echo -e "\n✅ Node updated successfully!"
+        echo "   Old version: $current_version"
+        echo "   New version: $new_version"
+        echo ""
+        read -rp "Show logs? (y/N): " show_logs
+        if [[ "$show_logs" == "y" || "$show_logs" == "Y" ]]; then
+            echo -e "\nShowing logs (press Ctrl+C to exit)..."
+            sudo journalctl -u celestia-appd -f --no-hostname -o cat
+        fi
+    else
+        echo "❌ Service failed to start. Check logs:"
+        sudo journalctl -u celestia-appd -n 50 --no-pager
+        return 1
+    fi
 }
+
+
 
 configure_firewall() {
     echo -e "\n╔══════════════════════════════╗"
@@ -1622,7 +1682,7 @@ install_node_menu() {
                 if [ $? -eq 0 ]; then break; fi
                 ;;
             0) break ;;
-            *) echo "Invalid option. Please enter a number between 0 and 6." ;;
+            *) echo "Invalid option. Please enter a number between 0 and 7."  ;;
         esac
     done
 }
@@ -1801,14 +1861,15 @@ show_main_menu() {
     echo "║  by PostHuman Validator   ║"
     echo "╚═══════════════════════════╝"
     echo "  1.  Install Node"
-    echo "  2.  Node Operations"
-    echo "  3.  Validator Operations"
-    echo "  4.  Bridge Management"
-    echo "  5.  Service Operations"
-    echo "  6.  Status & Logs"
+    echo "  2.  Update Node"
+    echo "  3.  Node Operations"
+    echo "  4.  Validator Operations"
+    echo "  5.  Bridge Management"
+    echo "  6.  Service Operations"
+    echo "  7.  Status & Logs"
     echo "  0.  Exit"
     echo ""
-    read -rp "Enter your choice [0-6]: " choice
+    read -rp "Enter your choice [0-7]: " choice
 }
 
 # Main menu loop
@@ -1816,17 +1877,18 @@ while true; do
     show_main_menu
     case $choice in
         1) install_node_menu ;;
-        2) node_operations_menu ;;
-        3) validator_operations_menu ;;
-        4) bridge_management_menu ;;
-        5) service_operations_menu ;;
-        6) status_logs_menu ;;
+        2) update_node ;; 
+        3) node_operations_menu ;;
+        4) validator_operations_menu ;;
+        5) bridge_management_menu ;;
+        6) service_operations_menu ;;
+        7) status_logs_menu ;;
         0)
             echo "Thank you for using Celestia Node Manager by PostHuman Validator!"
             echo "Visit https://posthuman.digital"
             exit 0
             ;;
-        *) echo "Invalid option. Please enter a number between 0 and 6." ;;
+        *) echo "Invalid option. Please enter a number between 0 and 7."  ;;
     esac
 done
 
