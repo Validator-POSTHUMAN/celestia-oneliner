@@ -325,6 +325,23 @@ install_node_consensus() {
     echo "Node type: $node_type"
     echo "Indexer: $indexer_type"
 
+    # Check for conflicting installations in default directory
+    if [ "$CELESTIA_HOME" != "$HOME/.celestia-app" ] && [ -d "$HOME/.celestia-app" ]; then
+        echo ""
+        echo "⚠️  Warning: Found existing installation in $HOME/.celestia-app"
+        echo "This may conflict with your custom installation at $CELESTIA_HOME"
+        echo ""
+        read -rp "Remove old installation? (y/N): " remove_old
+        if [[ "$remove_old" == "y" || "$remove_old" == "Y" ]]; then
+            sudo systemctl stop celestia-appd 2>/dev/null || true
+            rm -rf "$HOME/.celestia-app"
+            echo "✅ Old installation removed"
+        else
+            echo "⚠️  Continuing with both installations. This may cause issues."
+        fi
+        echo ""
+    fi
+
     # Install dependencies and Go
     check_system_requirements
     check_and_install_bbr
@@ -423,10 +440,12 @@ EOF
     # Reset and download snapshot
     echo "Downloading snapshot..."
     celestia-appd tendermint unsafe-reset-all --home $CELESTIA_HOME
-    if curl -s --head curl $SNAPSHOT_PRUNED | head -n 1 | grep "200" > /dev/null; then
-        curl $SNAPSHOT_PRUNED | zstd -d | tar -xf - -C $CELESTIA_HOME
+    if curl -s --head "$SNAPSHOT_PRUNED" | head -n 1 | grep "200" > /dev/null; then
+        echo "Snapshot available, downloading..."
+        curl -L "$SNAPSHOT_PRUNED" | zstd -d | tar -xf - -C "$CELESTIA_HOME"
+        echo "✅ Snapshot downloaded and extracted"
     else
-        echo "No snapshot found"
+        echo "⚠️  Snapshot not available, syncing from genesis"
     fi
 
     # Enable and start service
