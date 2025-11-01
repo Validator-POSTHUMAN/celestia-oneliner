@@ -107,11 +107,14 @@ sudo systemctl restart "${SERVICE_NAME}" && sudo journalctl -u "${SERVICE_NAME}"
 
 ## 📊 System Requirements
 
-### Validator / Full Node
-- **CPU**: 6+ cores (8+ recommended)
-- **RAM**: 8 GB minimum (16 GB recommended)
-- **Disk**: 500 GB NVMe SSD (1 TB recommended)
-- **Network**: 100 Mbps+ connection
+### Validator / Consensus Node (Official)
+- **CPU**: 16 cores
+- **RAM**: 32 GB
+- **Disk**: 2 TiB NVMe SSD
+- **Network**: 1 Gbps connection
+- **OS**: Ubuntu 20.04+ or similar Linux
+
+**Note**: These are official Celestia requirements for validator nodes. Non-validator full nodes may work with lower specs but are not recommended for production use.
 
 ### Archive Node
 - **CPU**: 8+ cores

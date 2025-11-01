@@ -8,9 +8,9 @@ set -euo pipefail
 # ------------------------------------------------
 
 # Global variables
-MIN_CPU_CORES=6
-MIN_RAM_MB=8000
-MIN_DISK_GB=500
+MIN_CPU_CORES=16
+MIN_RAM_MB=32000
+MIN_DISK_GB=2000
 GO_VERSION="1.24.1"
 APP_VERSION="v5.0.11"
 BRIDGE_VERSION="v0.21.5"
