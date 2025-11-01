@@ -439,13 +439,16 @@ EOF
 
     # Reset and download snapshot
     echo "Downloading snapshot..."
-    celestia-appd tendermint unsafe-reset-all --home $CELESTIA_HOME
+    # Use direct removal instead of tendermint reset to avoid config parsing issues
+    rm -rf "$CELESTIA_HOME/data" 2>/dev/null || true
     if curl -s --head "$SNAPSHOT_PRUNED" | head -n 1 | grep "200" > /dev/null; then
         echo "Snapshot available, downloading..."
         curl -L "$SNAPSHOT_PRUNED" | zstd -d | tar -xf - -C "$CELESTIA_HOME"
         echo "✅ Snapshot downloaded and extracted"
     else
         echo "⚠️  Snapshot not available, syncing from genesis"
+        # Recreate data directory if no snapshot
+        mkdir -p "$CELESTIA_HOME/data"
     fi
 
     # Enable and start service
