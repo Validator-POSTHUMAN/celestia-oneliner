@@ -10,7 +10,7 @@ curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner
 
 **Current Versions:**
 - 🌐 Mainnet: `v5.0.11` (chain-id: `celestia`)
-- 🧪 Testnet: `v6.2.0-mocha` (chain-id: `mocha-4`)
+- 🧪 Testnet: `v6.2.2-mocha` (chain-id: `mocha-4`)
 - 🔧 Go: `1.24.1`
 
 ---
@@ -71,7 +71,7 @@ Real-time sync status, logs, and system checks.
 **PostHuman Snapshots:**
 - 📍 https://snapshots.posthuman.digital/celestia-mainnet/
 - 📍 https://snapshots.posthuman.digital/celestia-testnet/
-- ⏱️ Updated every 24 hours
+- ⏱️ Updated roughly every 4 hours
 - 🌐 Fast worldwide delivery via Cloudflare R2
 
 **Manual snapshot restore:**

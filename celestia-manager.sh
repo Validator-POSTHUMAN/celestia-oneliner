@@ -93,7 +93,7 @@ configure_network() {
         RPC_URL="https://rpc-celestia-mainnet.posthuman.digital"
         PEERS="2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
     elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
-        APP_VERSION="v6.2.0-mocha"
+        APP_VERSION="v6.2.2-mocha"
         DEFAULT_CHAIN_ID="mocha-4"
         SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-testnet/snapshot-latest.tar.zst"
         GENESIS_URL="https://snapshots.posthuman.digital/celestia-testnet/genesis.json"
