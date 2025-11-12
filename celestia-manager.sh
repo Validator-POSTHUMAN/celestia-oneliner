@@ -18,26 +18,17 @@ NETWORK_TYPE="${NETWORK_TYPE:-mainnet}"
 CELESTIA_HOME="${CELESTIA_HOME:-$HOME/.celestia-app}"
 
 # Network-specific configuration (set by configure_network function)
-APP_VERSION=""
-DEFAULT_CHAIN_ID=""
-SNAPSHOT_PRUNED=""
-GENESIS_URL=""
-ADDRBOOK_URL=""
-RPC_URL=""
-BRIDGE_VERSION="v0.21.5"
-SNAPSHOT_ARCHIVE="https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
-SNAPSHOT_BRIDGE="https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
-
-# Network resources
-GENESIS_URL="https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
-ADDRBOOK_URL="https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
-
-# RPC URL
-RPC_URL="https://rpc.celestia-mainnet.posthuman.digital"
-
-# P2P Configuration
-SEEDS="12ad7c73c7e1f2460941326937a039139aa78884@celestia-mainnet-seed.itrocket.net:40656"
-PEERS="cd9f852141cd6f78e9443cea389911a6f0a5df72@8.52.247.252:26656,d535cbf8d0efd9100649aa3f53cb5cbab33ef2d6@celestia-mainnet-peer.itrocket.net:40656,eda6c9d514615893c77c379f29ce7668b575953d@195.14.6.129:26005,d99aec7727865baeb2f408ac80b120b1e14cffd1@65.109.122.249:11656,d0c4affc656bad26d7a46e4b946c0be71baa4a1f@46.4.51.104:11656,e263dbf2fbd4734a364dac1236bb8cbd83a0c012@157.90.33.62:28656,ff2088fe31a66724589a9bddf84d80981ddcacb3@176.9.10.245:26656,b519fc0c69726b43de28b82f998c8db7faf9741d@5.9.89.67:15670,3666a13ae086942cf6cda89b07b85491b5214669@65.21.227.52:26656,a71a4c58dce5b2268e3c7f229608772327110ee5@65.109.54.91:11056,54fe9521244b0d88da9552224e2c15fd077aa538@57.129.54.6:26656,adc25baad908bc1c84cd5690017fb409afc2400c@46.4.72.249:26630,2ae2d3d0b97c4fcd134decb202ac241cd2f44735@37.252.186.118:2000,9720064ae57d59c0f4a50db963e4b068f0f29594@136.243.21.50:29656,a7705a8dc73cb73abb381294e9136093f6555776@65.21.171.53:1500,423c5758cc785fe04d4e095630856f354c627e51@104.219.237.146:26656,396673f9d0559a2ec8b44016ef591dee96831989@148.251.13.186:11656,acca7837e4eb5f9dc7f5a94ed1d82edda6931ff8@135.181.246.172:26656,a5f01c0afea36df559b8d92e55626c0b5275dfd0@103.219.169.97:43656,3e45091b0cfa3915c2dffcb8a28f2c8fbf319afc@69.67.150.107:29656,711cdf89f5d709587c0b4beb9b67b5979948aac6@139.84.238.188:11656,e1b058e5cfa2b836ddaa496b10911da62dcf182e@164.152.161.199:26656,de0e7c1fc02158a14f6d7dfc40604917ef88b4ea@135.148.169.198:11656,9d4afca92c2d6e681d3605ae25cb1817620a9604@35.195.100.59:26656"
+APP_VERSION="${APP_VERSION:-}"
+DEFAULT_CHAIN_ID="${DEFAULT_CHAIN_ID:-}"
+SNAPSHOT_PRUNED="${SNAPSHOT_PRUNED:-}"
+GENESIS_URL="${GENESIS_URL:-}"
+ADDRBOOK_URL="${ADDRBOOK_URL:-}"
+RPC_URL="${RPC_URL:-}"
+SEEDS="${SEEDS:-}"
+PEERS="${PEERS:-}"
+BRIDGE_VERSION="${BRIDGE_VERSION:-v0.21.5}"
+SNAPSHOT_ARCHIVE="${SNAPSHOT_ARCHIVE:-}"
+SNAPSHOT_BRIDGE="${SNAPSHOT_BRIDGE:-}"
 
 
 ###################
@@ -83,23 +74,41 @@ EOF
 
 
 # Configure network-specific variables
+set_network_value() {
+    local mode=$1
+    local name=$2
+    local value=$3
+    local current="${!name-}"
+
+    if [[ "$mode" == "force" || -z "$current" ]]; then
+        printf -v "$name" '%s' "$value"
+    fi
+}
+
 configure_network() {
+    local mode=${1:-default}
     if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
-        APP_VERSION="v5.0.11"
-        DEFAULT_CHAIN_ID="celestia"
-        SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
-        GENESIS_URL="https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
-        ADDRBOOK_URL="https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
-        RPC_URL="https://rpc-celestia-mainnet.posthuman.digital"
-        PEERS="2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
+        set_network_value "$mode" APP_VERSION "v5.0.11"
+        set_network_value "$mode" DEFAULT_CHAIN_ID "celestia"
+        set_network_value "$mode" SNAPSHOT_PRUNED "https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
+        set_network_value "$mode" GENESIS_URL "https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
+        set_network_value "$mode" ADDRBOOK_URL "https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
+        set_network_value "$mode" RPC_URL "https://rpc-celestia-mainnet.posthuman.digital"
+        set_network_value "$mode" SEEDS "12ad7c73c7e1f2460941326937a039139aa78884@celestia-mainnet-seed.itrocket.net:40656"
+        set_network_value "$mode" PEERS "2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
+        set_network_value "$mode" SNAPSHOT_ARCHIVE "https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
+        set_network_value "$mode" SNAPSHOT_BRIDGE "https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
     elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
-        APP_VERSION="v6.2.2-mocha"
-        DEFAULT_CHAIN_ID="mocha-4"
-        SNAPSHOT_PRUNED="https://snapshots.posthuman.digital/celestia-testnet/snapshot-latest.tar.zst"
-        GENESIS_URL="https://snapshots.posthuman.digital/celestia-testnet/genesis.json"
-        ADDRBOOK_URL="https://snapshots.posthuman.digital/celestia-testnet/addrbook.json"
-        RPC_URL="https://rpc-celestia-testnet.posthuman.digital"
-        PEERS=""
+        set_network_value "$mode" APP_VERSION "v6.2.2-mocha"
+        set_network_value "$mode" DEFAULT_CHAIN_ID "mocha-4"
+        set_network_value "$mode" SNAPSHOT_PRUNED "https://snapshots.posthuman.digital/celestia-testnet/snapshot-latest.tar.zst"
+        set_network_value "$mode" GENESIS_URL "https://snapshots.posthuman.digital/celestia-testnet/genesis.json"
+        set_network_value "$mode" ADDRBOOK_URL "https://snapshots.posthuman.digital/celestia-testnet/addrbook.json"
+        set_network_value "$mode" RPC_URL "https://rpc-celestia-testnet.posthuman.digital"
+        set_network_value "$mode" SEEDS ""
+        set_network_value "$mode" PEERS "c5bc6e85bf763c5a08ed08a238028afe3c18fc4b@peer-celestia-testnet.posthuman.digital:39656"
+        set_network_value "$mode" SNAPSHOT_ARCHIVE ""
+        set_network_value "$mode" SNAPSHOT_BRIDGE ""
     fi
 }
 
@@ -122,7 +131,7 @@ select_network() {
         *) echo "Invalid choice. Keeping current: $NETWORK_TYPE" ;;
     esac
 
-    configure_network
+    configure_network force
     echo -e "\n✅ Network: $NETWORK_TYPE"
     echo "   Chain ID: $DEFAULT_CHAIN_ID"
     echo "   Version: $APP_VERSION"
