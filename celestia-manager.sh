@@ -26,7 +26,7 @@ ADDRBOOK_URL="${ADDRBOOK_URL:-}"
 RPC_URL="${RPC_URL:-}"
 SEEDS="${SEEDS:-}"
 PEERS="${PEERS:-}"
-BRIDGE_VERSION="${BRIDGE_VERSION:-v0.21.5}"
+BRIDGE_VERSION="${BRIDGE_VERSION:-v0.28.2}"
 SNAPSHOT_ARCHIVE="${SNAPSHOT_ARCHIVE:-}"
 SNAPSHOT_BRIDGE="${SNAPSHOT_BRIDGE:-}"
 
@@ -98,6 +98,7 @@ configure_network() {
         set_network_value "$mode" PEERS "2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
         set_network_value "$mode" SNAPSHOT_ARCHIVE "https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
         set_network_value "$mode" SNAPSHOT_BRIDGE "https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
+        set_network_value "$mode" BRIDGE_VERSION "v0.28.2"
     elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
         set_network_value "$mode" APP_VERSION "v6.2.5-mocha"
         set_network_value "$mode" DEFAULT_CHAIN_ID "mocha-4"
@@ -109,9 +110,10 @@ configure_network() {
         set_network_value "$mode" PEERS "c5bc6e85bf763c5a08ed08a238028afe3c18fc4b@peer-celestia-testnet.posthuman.digital:39656"
         set_network_value "$mode" SNAPSHOT_ARCHIVE ""
         set_network_value "$mode" SNAPSHOT_BRIDGE ""
+        set_network_value "$mode" BRIDGE_VERSION "v0.28.2-mocha"
     fi
 }
-
+}
 # Select network type
 select_network() {
     echo -e "\n╔══════════════════════════════╗"
