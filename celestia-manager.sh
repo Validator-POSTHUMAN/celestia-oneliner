@@ -99,7 +99,7 @@ configure_network() {
         set_network_value "$mode" SNAPSHOT_ARCHIVE "https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
         set_network_value "$mode" SNAPSHOT_BRIDGE "https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
     elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
-        set_network_value "$mode" APP_VERSION "v6.2.2-mocha"
+        set_network_value "$mode" APP_VERSION "v6.2.5-mocha"
         set_network_value "$mode" DEFAULT_CHAIN_ID "mocha-4"
         set_network_value "$mode" SNAPSHOT_PRUNED "https://snapshots.posthuman.digital/celestia-testnet/snapshot-latest.tar.zst"
         set_network_value "$mode" GENESIS_URL "https://snapshots.posthuman.digital/celestia-testnet/genesis.json"
