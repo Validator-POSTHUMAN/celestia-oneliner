@@ -88,7 +88,7 @@ set_network_value() {
 configure_network() {
     local mode=${1:-default}
     if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
-        set_network_value "$mode" APP_VERSION "v5.0.11"
+        set_network_value "$mode" APP_VERSION "v6.2.5"
         set_network_value "$mode" DEFAULT_CHAIN_ID "celestia"
         set_network_value "$mode" SNAPSHOT_PRUNED "https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
         set_network_value "$mode" GENESIS_URL "https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
@@ -757,14 +757,14 @@ update_node() {
     # Show current version
     current_version=$(celestia-appd version 2>/dev/null || echo "unknown")
     echo -e "\n📊 Current version: $current_version"
-    echo "📦 Recommended version: v5.0.11"
+    echo "📦 Recommended version: v6.2.5"
     echo ""
 
-    read -rp "Enter version to update to (press Enter for v5.0.11): " version_input
+    read -rp "Enter version to update to (press Enter for v6.2.5): " version_input
 
     # Use recommended version if empty
     if [[ -z "$version_input" ]]; then
-        version_input="v5.0.11"
+        version_input="v6.2.5"
         echo "✅ Using recommended version: $version_input"
     else
         # Add 'v' prefix if not present

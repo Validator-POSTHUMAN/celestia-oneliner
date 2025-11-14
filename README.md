@@ -9,7 +9,7 @@ curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner
 ```
 
 **Current Versions:**
-- 🌐 Mainnet: `v5.0.11` (chain-id: `celestia`)
+- 🌐 Mainnet: `v6.2.5` (chain-id: `celestia`)
 - 🧪 Testnet: `v6.2.5-mocha` (chain-id: `mocha-4`)
 - 🔧 Go: `1.24.1`
 
