@@ -26,7 +26,7 @@ ADDRBOOK_URL="${ADDRBOOK_URL:-}"
 RPC_URL="${RPC_URL:-}"
 SEEDS="${SEEDS:-}"
 PEERS="${PEERS:-}"
-BRIDGE_VERSION="${BRIDGE_VERSION:-v0.28.2}"
+BRIDGE_VERSION="${BRIDGE_VERSION:-}"
 SNAPSHOT_ARCHIVE="${SNAPSHOT_ARCHIVE:-}"
 SNAPSHOT_BRIDGE="${SNAPSHOT_BRIDGE:-}"
 
@@ -88,9 +88,9 @@ set_network_value() {
 configure_network() {
     local mode=${1:-default}
     if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
-        set_network_value "$mode" APP_VERSION "v6.2.5"
+        set_network_value "$mode" APP_VERSION "v8.0.8"
         set_network_value "$mode" DEFAULT_CHAIN_ID "celestia"
-        set_network_value "$mode" SNAPSHOT_PRUNED "https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst"
+        set_network_value "$mode" SNAPSHOT_PRUNED "https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.lz4"
         set_network_value "$mode" GENESIS_URL "https://snapshots.posthuman.digital/celestia-mainnet/genesis.json"
         set_network_value "$mode" ADDRBOOK_URL "https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
         set_network_value "$mode" RPC_URL "https://rpc-celestia-mainnet.posthuman.digital"
@@ -98,7 +98,7 @@ configure_network() {
         set_network_value "$mode" PEERS "2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
         set_network_value "$mode" SNAPSHOT_ARCHIVE "https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
         set_network_value "$mode" SNAPSHOT_BRIDGE "https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
-        set_network_value "$mode" BRIDGE_VERSION "v0.28.2"
+        set_network_value "$mode" BRIDGE_VERSION "v0.31.3"
     elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
         set_network_value "$mode" APP_VERSION "v6.2.5-mocha"
         set_network_value "$mode" DEFAULT_CHAIN_ID "mocha-4"
@@ -112,7 +112,6 @@ configure_network() {
         set_network_value "$mode" SNAPSHOT_BRIDGE ""
         set_network_value "$mode" BRIDGE_VERSION "v0.28.2-mocha"
     fi
-}
 }
 # Select network type
 select_network() {
@@ -757,14 +756,14 @@ update_node() {
     # Show current version
     current_version=$(celestia-appd version 2>/dev/null || echo "unknown")
     echo -e "\n📊 Current version: $current_version"
-    echo "📦 Recommended version: v6.2.5"
+    echo "📦 Recommended version: v8.0.8"
     echo ""
 
-    read -rp "Enter version to update to (press Enter for v6.2.5): " version_input
+    read -rp "Enter version to update to (press Enter for v8.0.8): " version_input
 
     # Use recommended version if empty
     if [[ -z "$version_input" ]]; then
-        version_input="v6.2.5"
+        version_input="v8.0.8"
         echo "✅ Using recommended version: $version_input"
     else
         # Add 'v' prefix if not present

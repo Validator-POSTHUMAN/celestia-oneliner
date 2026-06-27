@@ -9,8 +9,9 @@ curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner
 ```
 
 **Current Versions:**
-- 🌐 Mainnet: `v6.2.5` (chain-id: `celestia`)
+- 🌐 Mainnet: `v8.0.8` (chain-id: `celestia`)
 - 🧪 Testnet: `v6.2.5-mocha` (chain-id: `mocha-4`)
+- 🌉 Celestia DA nodes: `v0.31.3` on mainnet
 - 🔧 Go: `1.24.1`
 
 ---
@@ -80,7 +81,7 @@ export CELESTIA_HOME="$HOME/.celestia-app"
 sudo systemctl stop celestia-appd
 cp "${CELESTIA_HOME}/data/priv_validator_state.json" "${CELESTIA_HOME}/priv_validator_state.json.backup"
 rm -rf "${CELESTIA_HOME}/data"
-curl -L https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.zst | tar -I zstd -xf - -C "${CELESTIA_HOME}"
+curl -L https://snapshots.posthuman.digital/celestia-mainnet/snapshot-latest.tar.lz4 | lz4 -dc | tar -xf - -C "${CELESTIA_HOME}"
 mv "${CELESTIA_HOME}/priv_validator_state.json.backup" "${CELESTIA_HOME}/data/priv_validator_state.json"
 sudo systemctl restart celestia-appd && sudo journalctl -u celestia-appd -f
 ```
