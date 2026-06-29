@@ -114,7 +114,7 @@ configure_network() {
         set_network_value "$mode" RPC_URL "https://rpc-celestia-mainnet.posthuman.digital"
         set_network_value "$mode" SEEDS "12ad7c73c7e1f2460941326937a039139aa78884@celestia-mainnet-seed.itrocket.net:40656"
         set_network_value "$mode" PEERS "2cc7330049bc02e4276668c414222593d52eb718@135.181.227.236:40656"
-        set_network_value "$mode" SNAPSHOT_ARCHIVE "https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
+        set_network_value "$mode" SNAPSHOT_ARCHIVE ""
         set_network_value "$mode" SNAPSHOT_BRIDGE "https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
         set_network_value "$mode" BRIDGE_VERSION "v0.31.3"
     elif [[ "$NETWORK_TYPE" == "testnet" ]]; then
@@ -710,7 +710,9 @@ install_snapshot() {
     if [ "$node_type" = "pruned" ]; then
         echo "Will download pruned snapshot"
     else
-        echo "Will download archive snapshot"
+        echo "Archive snapshot restore is not available for $DEFAULT_CHAIN_ID."
+        echo "Use a pruned snapshot or sync an archive node from peers."
+        return 1
     fi
 
     read -rp "Do you want to proceed with snapshot installation? (y/N): " initial_confirm
@@ -727,26 +729,9 @@ install_snapshot() {
     sudo systemctl stop celestia-appd
     cp $CELESTIA_HOME/data/priv_validator_state.json $CELESTIA_HOME/priv_validator_state.json.backup 2>/dev/null || true
 
-    if [ "$node_type" = "pruned" ]; then
-        echo "Downloading pruned snapshot..."
-        rm -rf $CELESTIA_HOME/data
-        extract_snapshot_stream "$SNAPSHOT_PRUNED" "$CELESTIA_HOME"
-    else
-        echo "⚠️  Archive snapshot will take several hours to download."
-        echo "It's recommended to use tmux for this operation."
-
-        # Disable statesync to avoid sync issues
-        sed -i.bak -E "s|^(enable[[:space:]]+=[[:space:]]+).*$|\1false|" $CELESTIA_HOME/config/config.toml
-
-        echo "Downloading archive snapshot..."
-        cd $HOME
-        aria2c -x 16 -s 16 -o celestia-archive-snap.tar.lz4 $SNAPSHOT_ARCHIVE
-
-        echo "Extracting archive snapshot..."
-        rm -rf $CELESTIA_HOME/data
-        tar -I lz4 -xvf ~/celestia-archive-snap.tar.lz4 -C $CELESTIA_HOME
-        rm ~/celestia-archive-snap.tar.lz4
-    fi
+    echo "Downloading pruned snapshot..."
+    rm -rf $CELESTIA_HOME/data
+    extract_snapshot_stream "$SNAPSHOT_PRUNED" "$CELESTIA_HOME"
 
     # Restore validator state if backup exists
     if [ -f "$CELESTIA_HOME/priv_validator_state.json.backup" ]; then
