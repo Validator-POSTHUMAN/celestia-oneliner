@@ -113,7 +113,7 @@ configure_network() {
         set_network_value "$mode" ADDRBOOK_URL "https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json"
         set_network_value "$mode" RPC_URL "https://rpc-celestia-mainnet.posthuman.digital"
         set_network_value "$mode" SEEDS "12ad7c73c7e1f2460941326937a039139aa78884@celestia-mainnet-seed.itrocket.net:40656"
-        set_network_value "$mode" PEERS "2cc7330049bc02e4276668c414222593d52eb718@peer-celestia-mainnet.posthuman.digital:40656"
+        set_network_value "$mode" PEERS "2cc7330049bc02e4276668c414222593d52eb718@135.181.227.236:40656"
         set_network_value "$mode" SNAPSHOT_ARCHIVE "https://server-9.itrocket.net/mainnet/celestia/celestia_2025-02-28_4224952_snap.tar.lz4"
         set_network_value "$mode" SNAPSHOT_BRIDGE "https://server-9.itrocket.net/mainnet/celestia/bridge/celestia_2025-02-27_4219600_snap.tar.lz4"
         set_network_value "$mode" BRIDGE_VERSION "v0.31.3"
