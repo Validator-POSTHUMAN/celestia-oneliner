@@ -10,7 +10,7 @@ curl -sL https://raw.githubusercontent.com/Validator-POSTHUMAN/celestia-oneliner
 
 **Current Versions:**
 - 🌐 Mainnet: `v8.0.8` (chain-id: `celestia`)
-- 🧪 Testnet: `v6.2.5-mocha` (chain-id: `mocha-4`)
+- 🧪 Testnet: `v9.0.4-mocha` (chain-id: `mocha-4`)
 - 🌉 Celestia DA nodes: `v0.31.3` on mainnet
 - 🔧 Go: `1.24.1`
 
@@ -72,7 +72,7 @@ Real-time sync status, logs, and system checks.
 **PostHuman Snapshots:**
 - 📍 https://snapshots.posthuman.digital/celestia-mainnet/
 - 📍 https://snapshots.posthuman.digital/celestia-testnet/
-- ⏱️ Updated roughly every 4 hours
+- ⏱️ Mainnet snapshots are automated; testnet snapshots are refreshed manually while retention/storage is being fixed
 - 🌐 Fast worldwide delivery via Cloudflare R2
 
 **Manual snapshot restore:**
@@ -105,18 +105,16 @@ sudo systemctl restart celestia-appd && sudo journalctl -u celestia-appd -f
 ### Mainnet (celestia)
 - 🌐 **Website**: https://posthuman.digital
 - 📊 **Explorer**: https://explorer.posthuman.digital/celestia
-- 🔌 **RPC**: https://celestia-rpc.posthuman.digital
-- 🔌 **API**: https://celestia-api.posthuman.digital
-- 🔌 **gRPC**: celestia-grpc.posthuman.digital:443
+- 🔌 **RPC**: https://rpc-celestia-mainnet.posthuman.digital
+- 🔌 **API**: https://rest-celestia-mainnet.posthuman.digital
+- 🔌 **gRPC**: grpc-celestia-mainnet.posthuman.digital:443
 - 💾 **Snapshots**: https://snapshots.posthuman.digital/celestia-mainnet/
-- 🌐 **Peer**: `2cc7330049bc02e4276668c414222593d52eb718@celestia-peer.posthuman.digital:26656`
+- 🌐 **Peer**: `2cc7330049bc02e4276668c414222593d52eb718@135.181.227.236:40656`
 - 🌐 **Addrbook**: https://snapshots.posthuman.digital/celestia-mainnet/addrbook.json
 
 ### Testnet (mocha-4)
 - 📊 **Explorer**: https://explorer.posthuman.digital/celestia-testnet
-- 🔌 **RPC**: https://celestia-testnet-rpc.posthuman.digital
-- 🔌 **API**: https://celestia-testnet-api.posthuman.digital
-- 🔌 **gRPC**: celestia-testnet-grpc.posthuman.digital:443
+- 🔌 **RPC**: https://rpc-celestia-testnet.posthuman.digital
 - 💾 **Snapshots**: https://snapshots.posthuman.digital/celestia-testnet/
 - 🌐 **Addrbook**: https://snapshots.posthuman.digital/celestia-testnet/addrbook.json
 
