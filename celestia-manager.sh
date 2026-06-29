@@ -72,6 +72,24 @@ EOF
     fi
 }
 
+extract_snapshot_stream() {
+    local snapshot_url="$1"
+    local destination="$2"
+
+    case "$snapshot_url" in
+        *.tar.lz4|*.lz4)
+            curl -fL "$snapshot_url" | lz4 -dc | tar -xf - -C "$destination"
+            ;;
+        *.tar.zst|*.zst)
+            curl -fL "$snapshot_url" | zstd -dc | tar -xf - -C "$destination"
+            ;;
+        *)
+            echo "❌ Unsupported snapshot compression: $snapshot_url"
+            return 1
+            ;;
+    esac
+}
+
 
 # Configure network-specific variables
 set_network_value() {
@@ -221,7 +239,7 @@ install_dependencies() {
     echo "Installing dependencies..."
     sudo apt update
 #    sudo apt upgrade -y
-    sudo apt install curl git wget htop tmux build-essential jq make lz4 gcc unzip -y
+    sudo apt install curl git wget htop tmux build-essential jq make lz4 zstd gcc unzip -y
 }
 
 install_go() {
@@ -460,7 +478,7 @@ EOF
 
     if curl -s --head "$SNAPSHOT_PRUNED" | head -n 1 | grep "200" > /dev/null; then
         echo "Snapshot available, downloading..."
-        curl -L "$SNAPSHOT_PRUNED" | zstd -d | tar -xf - -C "$CELESTIA_HOME"
+        extract_snapshot_stream "$SNAPSHOT_PRUNED" "$CELESTIA_HOME"
         echo "✅ Snapshot downloaded and extracted"
     else
         echo "⚠️  Snapshot not available, syncing from genesis"
@@ -712,7 +730,7 @@ install_snapshot() {
     if [ "$node_type" = "pruned" ]; then
         echo "Downloading pruned snapshot..."
         rm -rf $CELESTIA_HOME/data
-        curl -L "$SNAPSHOT_PRUNED" | zstd -d | tar -xf - -C "$CELESTIA_HOME"
+        extract_snapshot_stream "$SNAPSHOT_PRUNED" "$CELESTIA_HOME"
     else
         echo "⚠️  Archive snapshot will take several hours to download."
         echo "It's recommended to use tmux for this operation."
